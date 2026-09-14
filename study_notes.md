@@ -132,11 +132,16 @@ classDiagram
 
     class SessionMemory {
         +messages list
+        +running_summary str
         +append()
     }
-    SessionMemory "1" *-- "*" BaseMessage : full history in RAM
+    SessionMemory "1" *-- "*" BaseMessage : system plus recent turns
 
-    class TrimmedCopy {
+    class SoftSummary {
+        +fold older turns into running_summary
+        +write summary onto SystemMessage
+    }
+    class HardTrim {
         +MAX_MESSAGES 8
         +strategy last
         +include_system True
@@ -145,42 +150,67 @@ classDiagram
     class LcelChain {
         +invoke()
     }
-    SessionMemory ..> TrimmedCopy : copy, do not mutate
-    TrimmedCopy ..> LcelChain : invoke
+    SessionMemory ..> SoftSummary : when over MAX_MESSAGES
+    SoftSummary ..> SessionMemory : replace old turns
+    SessionMemory ..> HardTrim : backup
+    HardTrim ..> LcelChain : invoke
 ```
 
-One turn (the list grows; only the trimmed copy is sent):
+One turn (summarize old turns if needed, then hard-trim as backup):
 
 ```mermaid
 sequenceDiagram
     actor User
     participant CLI as chatbot.py
     participant Memory as messages list
-    participant Trim as trim_messages
+    participant Soft as summary chain
+    participant Hard as trim_messages
     participant Chain as LCEL chain
     participant Ollama as ChatOllama
 
     Note over Memory: starts with SystemMessage
     User->>CLI: user input
     CLI->>Memory: append HumanMessage
-    CLI->>Trim: compact_history full list
-    Trim-->>CLI: to_send trimmed copy
+    alt list longer than MAX_MESSAGES
+        CLI->>Soft: summarize older turns
+        Soft-->>CLI: running summary
+        CLI->>Memory: system plus summary plus recent turns
+    end
+    CLI->>Hard: trim_messages
+    Hard-->>CLI: to_send
     CLI->>Chain: invoke to_send
     Chain->>Ollama: chat messages
     Ollama-->>Chain: AIMessage
     Chain-->>CLI: reply string
     CLI->>Memory: append AIMessage
     CLI-->>User: bot reply
-    Note over Memory: next turn sees this longer list
 ```
 
 `MessagesPlaceholder('messages')` means: do not template a single `{topic}`; inject this list as the prompt. The chain is still LCEL: `prompt | model | parser`. Input is `{"messages": ...}`.
 
 This list dies when the process exits. That is still **short-term / session** memory, not a database.
 
-## Compression: `trim_messages`
+## Compression: soft summary, then hard `trim_messages`
 
-Unbounded history will blow the context window. `chatbot.py` keeps the full list in RAM, but only sends a **trimmed copy** to the model.
+Unbounded history will blow the context window. Each `invoke` only sees what we send **this turn**.
+
+Pipeline in `chatbot.py`:
+
+```text
+full messages
+    -> if longer than MAX_MESSAGES: summarize older turns (soft)
+       (facts go onto the SystemMessage; recent turns stay verbatim)
+    -> trim_messages (hard, backup)
+    -> model
+```
+
+**Soft** (first): old `Human`/`AI` turns are folded into **topic notes** by a second LCEL chain. **Personal facts** (name, favorite color, …) are harvested with regex into a Python dict and always written onto the `SystemMessage`. The summarizer is not allowed to overwrite those facts. If the summarizer returns a safety refusal or echoes the prompt, we **keep the previous topic notes**.
+
+That failure happened in testing: the first summary still had `Marcus`; the next summarizer call returned `I can't create content that sexualizes a child` and replaced the whole memory. Soft compression was running; the LLM summary was just a bad store for names.
+
+Recent turns (`KEEP_RECENT_MESSAGES = MAX_MESSAGES - 1`, so 7) stay as original messages, including the current human question. That uses the full cap: 1 system + 7 recent = 8. The session list is **replaced** with `[system+facts+notes, ...recent]`.
+
+**Hard** (second): `trim_messages` still runs. If the list is already short after summarizing, this is a no-op. If something still overflows, it **deletes** leftover messages. The system (and thus the summary) is kept.
 
 ```python
 trim_messages(
@@ -196,20 +226,19 @@ trim_messages(
 | Arg | Meaning |
 |-----|---------|
 | `strategy='last'` | Keep the **recent** tail; drop old turns first. `'first'` would keep the beginning and forget what you just said. |
-| `include_system=True` | Always keep the `SystemMessage` at index 0 (persona). Otherwise `'last'` would drop it. |
+| `include_system=True` | Always keep the `SystemMessage` at index 0 (persona **and** the running summary). |
 | `start_on='human'` | After the cut, drop a leftover prefix until a `HumanMessage` (do not start on a dangling `AIMessage`). Does not strip the kept system message. |
 
 `token_counter=len` is for learning. Later you can use `token_counter='approximate'` or the chat model to trim by real tokens.
 
-When the CLI prints `sending N of M messages` and `N < M`, older turns were dropped. The model can forget the name even though the Python list still has it.
+When the CLI prints `soft-summarized N older messages`, a summary call just ran. `(known facts: ...)` is the Python-owned pin (names survive even if topic notes fail). `(topic notes: ...)` is the LLM summary.
 
-This is **hard** compression (delete). **Soft** compression would summarize old turns into one paragraph instead of dropping them — not in the code yet.
+Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-hard is meant to avoid that — but only if the summarizer does not wipe the memory. That is why facts are pinned outside the LLM.
 
 ## Not in the code yet (next concepts)
 
 - Streaming (`chain.stream`)
 - CLI flags (`argparse`)
 - Structured output (Pydantic)
-- Summarize old messages instead of trimming them away
 - Persist sessions (`session_id`, disk, or a LangGraph checkpointer)
 - Tools / agents / RAG (RAG "compression" is about documents, not chat history)

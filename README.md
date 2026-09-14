@@ -17,7 +17,8 @@ Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser, runni
 - `HumanMessage` / `AIMessage` / `SystemMessage` as the real chat history
 - `MessagesPlaceholder` to feed that list into the chain
 - Short-term **memory**: later turns see earlier messages
-- Context **compression** with `trim_messages` (`strategy='last'`, `include_system=True`, `start_on='human'`)
+- **Soft** compression: old turns become a running summary on the `SystemMessage`
+- **Hard** compression: `trim_messages` as a backup (`strategy='last'`, `include_system=True`, `start_on='human'`)
 
 ## Prerequisites
 
@@ -52,17 +53,16 @@ One topic at a time (no memory between questions):
 python first_chain.py
 ```
 
-Chatbot that remembers this session (until the history is trimmed):
+Chatbot that remembers this session (old turns are summarized, then hard-trimmed if still long):
 
 ```bash
 python chatbot.py
 ```
 
-Type `q`, `quit`, or `exit` to stop. Tell it your name, then ask `What is my name?` to see memory working. When the printed `sending N of M messages` has `N < M`, trim has dropped older turns.
+Type `q`, `quit`, or `exit` to stop. Tell it your name, chat for a while, then ask `What is my name?` The summary should keep that fact. `(memory: soft-summarized N older messages; ...)` means soft compression just ran.
 
 ## Optional next steps
 
 - Change the system prompt
 - Try streaming: `for chunk in chain.stream(...): print(chunk, end="")`
 - Swap `llama3.2` for another model you have in `ollama list`
-- Summarize old turns instead of dropping them (soft compression)
