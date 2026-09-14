@@ -68,8 +68,8 @@ Without it you would print something like an `AIMessage(...)`.
 result = chain.invoke({'topic': topic})
 ```
 
-- **`invoke`**: wait for the full answer, then return.
-- **`stream`**: yield chunks as they arrive (mentioned in README, not used in code yet).
+- **`invoke`**: wait for the full answer, then return (`first_chain.py`, and the summarizer in `chatbot.py`).
+- **`stream`**: yield chunks as they arrive (`chatbot.py` replies). Same chain, different consumption. The full string is still joined so we can append an `AIMessage`.
 - **`batch`**: several inputs at once (not used yet).
 
 In `first_chain.py`, the `while True` + `input()` loop is ordinary Python. It is **not** LangChain memory. Each `invoke` is a **new, independent** request.
@@ -237,8 +237,4 @@ Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-h
 
 ## Not in the code yet (next concepts)
 
-- Streaming (`chain.stream`)
-- CLI flags (`argparse`)
-- Structured output (Pydantic)
-- Persist sessions (`session_id`, disk, or a LangGraph checkpointer)
-- Tools / agents / RAG (RAG "compression" is about documents, not chat history)
+See README “Later concepts”: token-based trim, Pydantic structured output, persist sessions, one tool. RAG / LangGraph / a web UI stay out of this repo for now.

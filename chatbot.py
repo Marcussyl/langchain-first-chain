@@ -197,6 +197,17 @@ def hard_trim(messages: list[BaseMessage]) -> list[BaseMessage]:
     )
 
 
+def stream_reply(to_send: list[BaseMessage]) -> str:
+    """Print tokens as they arrive; return the full string for chat history."""
+    print('Bot: ', end='', flush=True)
+    parts: list[str] = []
+    for chunk in chain.stream({'messages': to_send}):
+        print(chunk, end='', flush=True)
+        parts.append(chunk)
+    print()
+    return ''.join(parts)
+
+
 if __name__ == '__main__':
     running_summary: str | None = None
     facts: dict[str, str] = {}
@@ -230,8 +241,7 @@ if __name__ == '__main__':
         if running_summary:
             print(f'(topic notes: {running_summary})')
 
-        reply = chain.invoke({'messages': to_send})
-        print(f'Bot: {reply}')
+        reply = stream_reply(to_send)
         print()
 
         messages.append(AIMessage(content=reply))
