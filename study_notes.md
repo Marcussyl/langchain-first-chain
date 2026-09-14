@@ -2,6 +2,11 @@
 
 Notes for what this repo actually uses so far. Not a full LangChain textbook.
 
+Two scripts:
+
+- `first_chain.py` — one prompt, one answer, no memory between questions.
+- `chatbot.py` — multi-turn messages + `trim_messages`.
+
 ## Big picture
 
 The app is one **LCEL chain**:
@@ -67,7 +72,9 @@ result = chain.invoke({'topic': topic})
 - **`stream`**: yield chunks as they arrive (mentioned in README, not used in code yet).
 - **`batch`**: several inputs at once (not used yet).
 
-The `while True` + `input()` loop is ordinary Python. It is **not** LangChain memory. Each `invoke` is a **new, independent** request. The model does not remember the previous topic unless we later pass chat history.
+In `first_chain.py`, the `while True` + `input()` loop is ordinary Python. It is **not** LangChain memory. Each `invoke` is a **new, independent** request.
+
+`chatbot.py` is the version that **does** pass history (see below).
 
 `if __name__ == '__main__'` keeps chain construction importable without starting the CLI.
 
@@ -104,10 +111,105 @@ Backslash is an escape in bash (`.venv\Scripts\activate` becomes `.venvScriptsac
 - `langchain-ollama`: `ChatOllama`.
 - `langchain`: umbrella / extra integrations; this tiny script mostly needs the two above.
 
+## Chatbot memory (`chatbot.py`)
+
+Short-term memory is just a **list of messages** kept in the process:
+
+```text
+[system, human, ai, human, ai, ...]
+```
+
+Each turn we append a `HumanMessage`, `invoke` the chain, then append an `AIMessage`. The next call includes those earlier messages, so "My name is Ada" then "What is my name?" can work.
+
+```mermaid
+classDiagram
+    class BaseMessage {
+        +content str
+    }
+    BaseMessage <|-- SystemMessage : persona
+    BaseMessage <|-- HumanMessage : user turn
+    BaseMessage <|-- AIMessage : model turn
+
+    class SessionMemory {
+        +messages list
+        +append()
+    }
+    SessionMemory "1" *-- "*" BaseMessage : full history in RAM
+
+    class TrimmedCopy {
+        +MAX_MESSAGES 8
+        +strategy last
+        +include_system True
+        +start_on human
+    }
+    class LcelChain {
+        +invoke()
+    }
+    SessionMemory ..> TrimmedCopy : copy, do not mutate
+    TrimmedCopy ..> LcelChain : invoke
+```
+
+One turn (the list grows; only the trimmed copy is sent):
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI as chatbot.py
+    participant Memory as messages list
+    participant Trim as trim_messages
+    participant Chain as LCEL chain
+    participant Ollama as ChatOllama
+
+    Note over Memory: starts with SystemMessage
+    User->>CLI: user input
+    CLI->>Memory: append HumanMessage
+    CLI->>Trim: compact_history full list
+    Trim-->>CLI: to_send trimmed copy
+    CLI->>Chain: invoke to_send
+    Chain->>Ollama: chat messages
+    Ollama-->>Chain: AIMessage
+    Chain-->>CLI: reply string
+    CLI->>Memory: append AIMessage
+    CLI-->>User: bot reply
+    Note over Memory: next turn sees this longer list
+```
+
+`MessagesPlaceholder('messages')` means: do not template a single `{topic}`; inject this list as the prompt. The chain is still LCEL: `prompt | model | parser`. Input is `{"messages": ...}`.
+
+This list dies when the process exits. That is still **short-term / session** memory, not a database.
+
+## Compression: `trim_messages`
+
+Unbounded history will blow the context window. `chatbot.py` keeps the full list in RAM, but only sends a **trimmed copy** to the model.
+
+```python
+trim_messages(
+    messages,
+    max_tokens=MAX_MESSAGES,
+    token_counter=len,   # each message counts as 1, so this is "max messages"
+    strategy='last',
+    include_system=True,
+    start_on='human',
+)
+```
+
+| Arg | Meaning |
+|-----|---------|
+| `strategy='last'` | Keep the **recent** tail; drop old turns first. `'first'` would keep the beginning and forget what you just said. |
+| `include_system=True` | Always keep the `SystemMessage` at index 0 (persona). Otherwise `'last'` would drop it. |
+| `start_on='human'` | After the cut, drop a leftover prefix until a `HumanMessage` (do not start on a dangling `AIMessage`). Does not strip the kept system message. |
+
+`token_counter=len` is for learning. Later you can use `token_counter='approximate'` or the chat model to trim by real tokens.
+
+When the CLI prints `sending N of M messages` and `N < M`, older turns were dropped. The model can forget the name even though the Python list still has it.
+
+This is **hard** compression (delete). **Soft** compression would summarize old turns into one paragraph instead of dropping them — not in the code yet.
+
 ## Not in the code yet (next concepts)
 
 - Streaming (`chain.stream`)
-- CLI flags (`argparse`: `--topic`, `--model`)
-- Structured output (Pydantic instead of a free-form string)
-- Chat history (`MessagesPlaceholder`) — real multi-turn memory
-- Tools / agents / RAG
+- CLI flags (`argparse`)
+- Structured output (Pydantic)
+- Summarize old messages instead of trimming them away
+- Persist sessions (`session_id`, disk, or a LangGraph checkpointer)
+- Tools / agents / RAG (RAG "compression" is about documents, not chat history)

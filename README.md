@@ -4,11 +4,20 @@ Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser, runni
 
 ## What you learn
 
+**`first_chain.py` (one-shot explain):**
+
 - `ChatPromptTemplate.from_messages` with a system role and a `{topic}` human message
 - Passing a dict into LCEL: `chain.invoke({"topic": ...})`
 - `ChatOllama` to call a local model
 - `StrOutputParser` to get a plain string
 - LCEL piping with `|`: `prompt | model | parser`
+
+**`chatbot.py` (multi-turn):**
+
+- `HumanMessage` / `AIMessage` / `SystemMessage` as the real chat history
+- `MessagesPlaceholder` to feed that list into the chain
+- Short-term **memory**: later turns see earlier messages
+- Context **compression** with `trim_messages` (`strategy='last'`, `include_system=True`, `start_on='human'`)
 
 ## Prerequisites
 
@@ -37,14 +46,23 @@ ollama serve
 
 ## Run
 
+One topic at a time (no memory between questions):
+
 ```bash
 python first_chain.py
 ```
 
-The script asks for a topic, prints a 2-sentence explanation, then asks again. Type `q`, `quit`, or `exit` to stop.
+Chatbot that remembers this session (until the history is trimmed):
+
+```bash
+python chatbot.py
+```
+
+Type `q`, `quit`, or `exit` to stop. Tell it your name, then ask `What is my name?` to see memory working. When the printed `sending N of M messages` has `N < M`, trim has dropped older turns.
 
 ## Optional next steps
 
-- Change the system or human prompt in `first_chain.py`
-- Try streaming: `for chunk in chain.stream({"topic": topic}): print(chunk, end="")`
+- Change the system prompt
+- Try streaming: `for chunk in chain.stream(...): print(chunk, end="")`
 - Swap `llama3.2` for another model you have in `ollama list`
+- Summarize old turns instead of dropping them (soft compression)
