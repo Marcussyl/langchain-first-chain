@@ -4,7 +4,8 @@ Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser, runni
 
 ## What you learn
 
-- `ChatPromptTemplate` to shape inputs
+- `ChatPromptTemplate.from_messages` with a system role and a `{topic}` human message
+- Passing a dict into LCEL: `chain.invoke({"topic": ...})`
 - `ChatOllama` to call a local model
 - `StrOutputParser` to get a plain string
 - LCEL piping with `|`: `prompt | model | parser`
@@ -22,7 +23,9 @@ ollama pull llama3.2
 
 # Project env
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # macOS/Linux
+source .venv/Scripts/activate      # Windows Git Bash
+.venv\Scripts\activate.bat         # Windows CMD
 pip install -r requirements.txt
 ```
 
@@ -38,10 +41,10 @@ ollama serve
 python first_chain.py
 ```
 
-You should see a short explanation of LangChain printed in the terminal.
+The script asks for a topic, prints a 2-sentence explanation, then asks again. Type `q`, `quit`, or `exit` to stop.
 
 ## Optional next steps
 
-- Change the prompt template or the `{topic}` value
-- Try streaming: `for chunk in chain.stream({\"topic\": \"LCEL\"}): print(chunk, end=\"\")`
+- Change the system or human prompt in `first_chain.py`
+- Try streaming: `for chunk in chain.stream({"topic": topic}): print(chunk, end="")`
 - Swap `llama3.2` for another model you have in `ollama list`
