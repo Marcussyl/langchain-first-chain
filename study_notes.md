@@ -198,9 +198,9 @@ Pipeline in `chatbot.py`:
 
 ```text
 full messages
-    -> if longer than MAX_MESSAGES: summarize older turns (soft)
-       (facts go onto the SystemMessage; recent turns stay verbatim)
-    -> trim_messages (hard, backup)
+    -> if too many messages OR too many tokens: summarize older turns (soft)
+       (facts stay in a Python dict on the SystemMessage; recent turns stay verbatim)
+    -> trim_messages by approximate tokens (hard, backup)
     -> model
 ```
 
@@ -208,15 +208,15 @@ full messages
 
 That failure happened in testing: the first summary still had `Marcus`; the next summarizer call returned `I can't create content that sexualizes a child` and replaced the whole memory. Soft compression was running; the LLM summary was just a bad store for names.
 
-Recent turns (`KEEP_RECENT_MESSAGES = MAX_MESSAGES - 1`, so 7) stay as original messages, including the current human question. That uses the full cap: 1 system + 7 recent = 8. The session list is **replaced** with `[system+facts+notes, ...recent]`.
+Recent turns (`KEEP_RECENT_MESSAGES = 7`) stay as original messages, including the current human question. Soft compression also starts if approximate tokens go above `SUMMARY_TRIGGER_TOKENS` (1400), even when there are still few messages.
 
-**Hard** (second): `trim_messages` still runs. If the list is already short after summarizing, this is a no-op. If something still overflows, it **deletes** leftover messages. The system (and thus the summary) is kept.
+**Hard** (second): `trim_messages` caps the **token** budget (`MAX_CONTEXT_TOKENS = 2048`), not the message count. A long `SystemMessage` is still 1 message but can use hundreds of tokens. `token_counter='approximate'` is a fast estimate (not the Ollama tokenizer). `include_system=True` keeps persona + known facts.
 
 ```python
 trim_messages(
     messages,
-    max_tokens=MAX_MESSAGES,
-    token_counter=len,   # each message counts as 1, so this is "max messages"
+    max_tokens=MAX_CONTEXT_TOKENS,
+    token_counter='approximate',
     strategy='last',
     include_system=True,
     start_on='human',
@@ -229,12 +229,12 @@ trim_messages(
 | `include_system=True` | Always keep the `SystemMessage` at index 0 (persona **and** the running summary). |
 | `start_on='human'` | After the cut, drop a leftover prefix until a `HumanMessage` (do not start on a dangling `AIMessage`). Does not strip the kept system message. |
 
-`token_counter=len` is for learning. Later you can use `token_counter='approximate'` or the chat model to trim by real tokens.
+`token_counter=len` (old) counted each message as 1. That was easier to demo, but it is not how the model window works.
 
-When the CLI prints `soft-summarized N older messages`, a summary call just ran. `(known facts: ...)` is the Python-owned pin (names survive even if topic notes fail). `(topic notes: ...)` is the LLM summary.
+When the CLI prints `~890/2048 tokens`, that is the approximate size of **this request**. If it also prints `was ~2100`, hard trim dropped tokens. `(known facts: ...)` is the Python-owned pin (names survive even if topic notes fail). `(topic notes: ...)` is the LLM summary.
 
 Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-hard is meant to avoid that — but only if the summarizer does not wipe the memory. That is why facts are pinned outside the LLM.
 
 ## Not in the code yet (next concepts)
 
-See README “Later concepts”: token-based trim, Pydantic structured output, persist sessions, one tool. RAG / LangGraph / a web UI stay out of this repo for now.
+See README “Later concepts”: Pydantic structured output, persist sessions, one tool. RAG / LangGraph / a web UI stay out of this repo for now.

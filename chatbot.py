@@ -4,6 +4,7 @@
 import re
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, trim_messages
+from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_ollama import ChatOllama
@@ -21,12 +22,15 @@ SYSTEM_PROMPT = (
     'Keep answers concise (a few short sentences) unless the user asks for more detail.'
 )
 
-# With token_counter=len, max_tokens is actually a max message count.
-MAX_MESSAGES = 8
-# Fill the budget: 1 SystemMessage + this many recent turns = MAX_MESSAGES.
-# Odd on purpose: after we append the latest HumanMessage, the tail is
-# H, A, H, ... H so start_on='human' stays valid.
-KEEP_RECENT_MESSAGES = MAX_MESSAGES - 1
+# Soft compression still folds extra *turns* so the list does not grow forever.
+# Odd KEEP so after we append the latest HumanMessage the tail starts on human.
+MAX_MESSAGES_BEFORE_SUMMARY = 8
+KEEP_RECENT_MESSAGES = 7
+
+# Hard trim uses the real unit: tokens (approximate). Smaller than llama3.2's
+# full window on purpose so the CLI budget is easy to see.
+MAX_CONTEXT_TOKENS = 2048
+SUMMARY_TRIGGER_TOKENS = 1400
 
 FACT_PATTERNS = (
     (r'(?i)\bmy name is\s+([A-Za-z]+)', 'user_name'),
@@ -153,13 +157,20 @@ def read_user_text() -> str | None:
     return text
 
 
+def count_tokens(messages: list[BaseMessage]) -> int:
+    """Approximate token count (not the model's exact tokenizer)."""
+    return count_tokens_approximately(messages)
+
+
 def apply_soft_compression(
     messages: list[BaseMessage],
     running_summary: str | None,
     facts: dict[str, str],
 ) -> tuple[list[BaseMessage], str | None, int]:
     """Replace old turns with topic notes. Keep the previous notes if the LLM refuses."""
-    if len(messages) <= MAX_MESSAGES:
+    over_messages = len(messages) > MAX_MESSAGES_BEFORE_SUMMARY
+    over_tokens = count_tokens(messages) > SUMMARY_TRIGGER_TOKENS
+    if not over_messages and not over_tokens:
         return messages, running_summary, 0
     if len(messages) <= 1 + KEEP_RECENT_MESSAGES:
         return messages, running_summary, 0
@@ -185,11 +196,11 @@ def apply_soft_compression(
 
 
 def hard_trim(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """Drop leftover messages if the list is still over the cap."""
+    """Drop old messages until the approximate token budget fits."""
     return trim_messages(
         messages,
-        max_tokens=MAX_MESSAGES,
-        token_counter=len,
+        max_tokens=MAX_CONTEXT_TOKENS,
+        token_counter='approximate',
         strategy='last',
         include_system=True,
         start_on='human',
@@ -215,6 +226,7 @@ if __name__ == '__main__':
 
     print('Chatbot with short-term memory. Empty input is ignored; type q to quit.')
     print('Try: tell it your name, chat for a while, then ask "What is my name?"')
+    print(f'Hard-trim budget: ~{MAX_CONTEXT_TOKENS} tokens (approximate).')
     print()
 
     while True:
@@ -236,7 +248,13 @@ if __name__ == '__main__':
         to_send = hard_trim(messages)
 
         extra = f'soft-summarized {n_summarized} older messages; ' if n_summarized else ''
-        print(f'(memory: {extra}sending {len(to_send)} of {len(messages)} messages)')
+        tokens_before = count_tokens(messages)
+        tokens_after = count_tokens(to_send)
+        print(
+            f'(memory: {extra}sending {len(to_send)} of {len(messages)} messages, '
+            f'~{tokens_after}/{MAX_CONTEXT_TOKENS} tokens'
+            f'{f", was ~{tokens_before}" if tokens_after != tokens_before else ""})'
+        )
         print(f'(known facts: {format_facts(facts)})')
         if running_summary:
             print(f'(topic notes: {running_summary})')
