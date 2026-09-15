@@ -2,9 +2,10 @@
 
 Notes for what this repo actually uses so far. Not a full LangChain textbook.
 
-Two scripts:
+Three scripts:
 
 - `first_chain.py` — one prompt, one answer, no memory between questions.
+- `extract_paragraph.py` — one paste, Pydantic fields (`summary`, `paragraph_count`, `author`, `published_at`).
 - `chatbot.py` — multi-turn messages + `trim_messages`.
 
 ## Big picture
@@ -110,6 +111,43 @@ Backslash is an escape in bash (`.venv\Scripts\activate` becomes `.venvScriptsac
 - `langchain-core`: prompts, parsers, LCEL primitives.
 - `langchain-ollama`: `ChatOllama`.
 - `langchain`: umbrella / extra integrations; this tiny script mostly needs the two above.
+- `pydantic`: field schemas for `extract_paragraph.py` (LangChain already depends on it; listed explicitly).
+
+## Structured output (`extract_paragraph.py`)
+
+`StrOutputParser` gives one string. Structured output gives **typed fields** the rest of the program can use without regex.
+
+A single `answer` field would just wrap the same chatbot string in JSON. Four fields make the schema the point of the lesson:
+
+| Field | Type | Rule |
+|-----|------|------|
+| `summary` | `str` | A few sentences covering the paste. |
+| `paragraph_count` | `int` | How many paragraphs the model thinks are in the text. |
+| `author` | `str \| None` | Only if the text states an author; else null. Do not invent. |
+| `published_at` | `str \| None` | `YYYY-MM-DD` only if the text states a date; else null. |
+
+The chain is still LCEL. The last step is Ollama's JSON schema instead of a string parser:
+
+```python
+structured_model = model.with_structured_output(
+    ParagraphExtract,
+    method='json_schema',
+    include_raw=True,
+)
+chain = prompt | structured_model
+```
+
+`method='json_schema'` uses Ollama's structured-output `format`. `include_raw=True` means a bad parse is `{raw, parsed, parsing_error}` instead of crashing the CLI. We print `(structured: parse failed)` and the raw text; we do not invent fields.
+
+`invoke` waits for the full object (no token streaming). Streaming JSON would print `{ "summary": ...` which is not useful here.
+
+Each `invoke` is independent, like `first_chain.py`. There is no message list.
+
+**Python paragraph count:** `count_paragraphs` splits on blank lines (`\n\n`). The CLI prints it next to the model's `paragraph_count` so you can see when the LLM miscounts. That check is ordinary Python, not a second model call.
+
+A one-line `input()` paste usually has `python count: 1`. Two paragraphs in one paste need a blank line between them (`\n\n`).
+
+`chatbot.py` is unchanged: facts still use regex; replies still stream. Applying Pydantic there is a later optional tweak.
 
 ## Chatbot memory (`chatbot.py`)
 
@@ -237,4 +275,4 @@ Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-h
 
 ## Not in the code yet (next concepts)
 
-See README “Later concepts”: Pydantic structured output, persist sessions, one tool. RAG / LangGraph / a web UI stay out of this repo for now.
+See README “Later concepts”: persist sessions, one tool. RAG / LangGraph / a web UI stay out of this repo for now. Chatbot facts still use regex.
