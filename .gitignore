@@ -16,6 +16,10 @@ env/
 .env
 .env.*
 
+# Local chatbot sessions (keep the folder, not the JSON)
+sessions/*.json
+sessions/*.json.tmp
+
 # IDE / OS
 .idea/
 .vscode/

@@ -226,7 +226,9 @@ sequenceDiagram
 
 `MessagesPlaceholder('messages')` means: do not template a single `{topic}`; inject this list as the prompt. The chain is still LCEL: `prompt | model | parser`. Input is `{"messages": ...}`.
 
-This list dies when the process exits. That is still **short-term / session** memory, not a database.
+The in-process list is still **short-term** memory: it is what this request sends to the model. **Long-term** memory is `sessions/<session_id>.json` (`facts`, `topic_notes`, human/ai turns). A new process with the same id loads that file. `SystemMessage` is not stored; `make_system` rebuilds it so the persona text can change without stale JSON.
+
+This is ordinary `json` + a file, not a LangGraph checkpointer. A different session id is a different file, so `ada` does not see `bob`.
 
 ## Compression: soft summary, then hard `trim_messages`
 
@@ -275,4 +277,4 @@ Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-h
 
 ## Not in the code yet (next concepts)
 
-See README “Later concepts”: persist sessions, one tool. RAG / LangGraph / a web UI stay out of this repo for now. Chatbot facts still use regex.
+See README “Later concepts”: one tool. RAG / LangGraph / a web UI stay out of this repo for now. Chatbot facts still use regex. JSON sessions are on disk; LangGraph checkpointers still wait.

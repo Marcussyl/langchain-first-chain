@@ -29,6 +29,7 @@ Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser (or st
 - **Soft** compression: old turns become a running summary on the `SystemMessage`
 - **Hard** compression: `trim_messages` with `token_counter='approximate'` (`strategy='last'`, `include_system=True`, `start_on='human'`)
 - **Streaming**: `chain.stream` prints tokens as they arrive (`invoke` waits for the full answer)
+- **Persist sessions**: `facts` + topic notes + recent human/ai turns in `sessions/<session_id>.json` (system message is rebuilt on load)
 
 ## Prerequisites
 
@@ -75,7 +76,7 @@ Paste a paragraph and print structured fields (`summary`, `paragraph_count`, `au
 python extract_paragraph.py
 ```
 
-Type `q`, `quit`, or `exit` to stop. For the chatbot: tell it your name, chat for a while, then ask `What is my name?` Known facts are pinned in Python so they survive summarizer glitches. Replies **stream** token by token. The memory line shows `~tokens/2048`; hard trim cuts by **tokens**, not by message count. `(memory: soft-summarized N older messages; ...)` means soft compression just ran.
+Type `q`, `quit`, or `exit` to stop. For the chatbot: at start, enter a session id (blank = `default`). Tell it your name, quit, run it again with the **same** id, then ask `What is my name?` Facts, topic notes, and recent turns live in `sessions/<id>.json` (gitignored). Known facts are also pinned in Python so they survive summarizer glitches. Replies **stream** token by token. The memory line shows `~tokens/2048`; hard trim cuts by **tokens**, not by message count. `(memory: soft-summarized N older messages; ...)` means soft compression just ran.
 
 For `extract_paragraph.py`, each paste is a new request. Replies print in one go (not streamed). If the model omits author or date, those fields show `(none)`. Chatbot facts still use regex until a later slice.
 
@@ -83,11 +84,10 @@ For `extract_paragraph.py`, each paste is a new request. Replies print in one go
 
 Keep these for the next learning slices. One concept at a time; stay on this terminal chatbot.
 
-1. **Persist sessions** — write `facts` + topic notes + recent messages to JSON keyed by `session_id`. Short-term memory is one request’s context; this is long-term memory on disk. LangGraph checkpointers can wait.
-2. **One tool / tiny agent** — e.g. `get_time` or `ollama list`. Learn tool calls and `ToolMessage` (why trim uses `start_on='human'`). Stop at one tool.
-3. **Leave for another repo** — RAG / vector stores (that compression is about documents, not chat), LangGraph multi-node graphs, FastAPI / a web UI.
+1. **One tool / tiny agent** — e.g. `get_time` or `ollama list`. Learn tool calls and `ToolMessage` (why trim uses `start_on='human'`). Stop at one tool.
+2. **Leave for another repo** — RAG / vector stores (that compression is about documents, not chat), LangGraph multi-node graphs, FastAPI / a web UI.
 
-Suggested order: JSON session → one tool. Chatbot facts still use regex; applying Pydantic there is a later optional tweak.
+Suggested order: one tool. Chatbot facts still use regex; applying Pydantic there is a later optional tweak. This JSON file is not a LangGraph checkpointer.
 
 ## Optional tweaks
 

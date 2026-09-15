@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Multi-turn chatbot: message history + soft summary + hard trim (Ollama)."""
 
+import json
 import re
+from pathlib import Path
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
@@ -97,6 +99,10 @@ summary_prompt = ChatPromptTemplate.from_messages(
 summary_chain = summary_prompt | model | parser
 
 QUIT_COMMANDS = {'q', 'quit', 'exit'}
+DEFAULT_SESSION_ID = 'default'
+SESSIONS_DIR = Path('sessions')
+# Block path traversal; file name is sessions/<id>.json.
+SESSION_ID_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
 
 
 def harvest_facts(user_text: str, facts: dict[str, str]) -> None:
@@ -219,14 +225,122 @@ def stream_reply(to_send: list[BaseMessage]) -> str:
     return ''.join(parts)
 
 
-if __name__ == '__main__':
-    running_summary: str | None = None
-    facts: dict[str, str] = {}
-    messages: list[BaseMessage] = [make_system(facts, None)]
+def session_file(session_id: str) -> Path:
+    """JSON path for one session id (never a user-supplied path)."""
+    return SESSIONS_DIR / f'{session_id}.json'
 
-    print('Chatbot with short-term memory. Empty input is ignored; type q to quit.')
-    print('Try: tell it your name, chat for a while, then ask "What is my name?"')
+
+def read_session_id() -> str:
+    """Ask which disk session to use. Blank means default."""
+    while True:
+        raw = input('Session id (blank = default): ').strip()
+        if not raw:
+            return DEFAULT_SESSION_ID
+        if SESSION_ID_PATTERN.fullmatch(raw):
+            return raw
+        print('Use only letters, digits, ".", "_", or "-".')
+
+
+def messages_to_json(messages: list[BaseMessage]) -> list[dict[str, str]]:
+    """Serialize human/ai turns only. SystemMessage is rebuilt on load."""
+    rows: list[dict[str, str]] = []
+    for message in messages:
+        if isinstance(message, HumanMessage):
+            rows.append({'role': 'human', 'content': str(message.content)})
+        elif isinstance(message, AIMessage):
+            rows.append({'role': 'ai', 'content': str(message.content)})
+    return rows
+
+
+def messages_from_json(rows: list) -> list[BaseMessage]:
+    """Rebuild human/ai turns. Unknown roles fail the whole load."""
+    history: list[BaseMessage] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError('each message must be an object')
+        role = row.get('role')
+        content = row.get('content')
+        if not isinstance(content, str):
+            raise ValueError('message content must be a string')
+        if role == 'human':
+            history.append(HumanMessage(content=content))
+        elif role == 'ai':
+            history.append(AIMessage(content=content))
+        else:
+            raise ValueError(f'unknown role: {role}')
+    return history
+
+
+def pinned_facts(raw: dict) -> dict[str, str]:
+    """Keep only known fact keys as strings."""
+    return {
+        str(key): str(value)
+        for key, value in raw.items()
+        if key in FACT_LABELS and value is not None
+    }
+
+
+def load_session(
+    path: Path,
+) -> tuple[dict[str, str], str | None, list[BaseMessage], str]:
+    """Load facts, topic notes, and human/ai messages. status is new/loaded/failed."""
+    if not path.exists():
+        return {}, None, [], 'new'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError('session file must be an object')
+        facts_raw = data.get('facts') or {}
+        if not isinstance(facts_raw, dict):
+            raise ValueError('facts must be an object')
+        notes = data.get('topic_notes')
+        if notes is not None and not isinstance(notes, str):
+            raise ValueError('topic_notes must be a string or null')
+        rows = data.get('messages') or []
+        if not isinstance(rows, list):
+            raise ValueError('messages must be a list')
+        history = messages_from_json(rows)
+        return pinned_facts(facts_raw), notes, history, 'loaded'
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return {}, None, [], 'failed'
+
+
+def save_session(
+    path: Path,
+    session_id: str,
+    facts: dict[str, str],
+    notes: str | None,
+    messages: list[BaseMessage],
+) -> None:
+    """Write JSON atomically so a crash keeps the last complete turn."""
+    SESSIONS_DIR.mkdir(exist_ok=True)
+    payload = {
+        'session_id': session_id,
+        'facts': pinned_facts(facts),
+        'topic_notes': notes,
+        'messages': messages_to_json(messages),
+    }
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    tmp.replace(path)
+
+
+if __name__ == '__main__':
+    SESSIONS_DIR.mkdir(exist_ok=True)
+    session_id = read_session_id()
+    path = session_file(session_id)
+    facts, running_summary, history, status = load_session(path)
+    messages: list[BaseMessage] = [make_system(facts, running_summary), *history]
+
+    print('Chatbot with short-term memory plus JSON on disk. Empty input is ignored; type q to quit.')
+    print('Try: tell it your name, quit, restart with the same session id, then ask "What is my name?"')
     print(f'Hard-trim budget: ~{MAX_CONTEXT_TOKENS} tokens (approximate).')
+    if status == 'loaded':
+        print(f'(session: {session_id}  loaded {len(history)} messages)')
+    elif status == 'failed':
+        print(f'(session: {session_id} load failed, starting fresh)')
+    else:
+        print(f'(session: {session_id}  new)')
     print()
 
     while True:
@@ -263,3 +377,4 @@ if __name__ == '__main__':
         print()
 
         messages.append(AIMessage(content=reply))
+        save_session(path, session_id, facts, running_summary, messages)
