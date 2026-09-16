@@ -19,6 +19,8 @@ env/
 # Local chatbot sessions (keep the folder, not the JSON)
 sessions/*.json
 sessions/*.json.tmp
+sessions/*.sqlite
+sessions/*.sqlite-*
 
 # IDE / OS
 .idea/

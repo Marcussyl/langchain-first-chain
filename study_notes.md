@@ -2,11 +2,12 @@
 
 Notes for what this repo actually uses so far. Not a full LangChain textbook.
 
-Three scripts:
+Four scripts:
 
 - `first_chain.py` — one prompt, one answer, no memory between questions.
 - `extract_paragraph.py` — one paste, Pydantic fields (`summary`, `paragraph_count`, `author`, `published_at`).
-- `chatbot.py` — multi-turn messages + `trim_messages`.
+- `chatbot.py` — multi-turn messages + `trim_messages` + JSON sessions.
+- `graph_chatbot.py` — same turn logic as a LangGraph; sqlite checkpointer.
 
 ## Big picture
 
@@ -112,6 +113,7 @@ Backslash is an escape in bash (`.venv\Scripts\activate` becomes `.venvScriptsac
 - `langchain-ollama`: `ChatOllama`.
 - `langchain`: umbrella / extra integrations; this tiny script mostly needs the two above.
 - `pydantic`: field schemas for `extract_paragraph.py` (LangChain already depends on it; listed explicitly).
+- `langgraph` / `langgraph-checkpoint-sqlite`: `StateGraph` + sqlite checkpointer for `graph_chatbot.py`.
 
 ## Structured output (`extract_paragraph.py`)
 
@@ -253,6 +255,18 @@ invoke
 
 JSON stores `tool_calls` on `role: ai` and `role: tool` with `tool_call_id`. Reloading must keep the pair together.
 
+## LangGraph twin (`graph_chatbot.py`)
+
+`chatbot.py` still owns the functions. `graph_chatbot.py` imports them and runs one turn as two nodes:
+
+```text
+START -> prepare (make_system + soft compress) -> generate (hard trim + run_turn) -> END
+```
+
+State is `messages`, `facts`, `topic_notes`, `n_summarized`. Nodes **replace** the list (no `add_messages`), because this app rewrites `messages[0]` and sometimes replaces the whole tail. A session id is `thread_id`. Checkpointer is SQLite at `sessions/langgraph.sqlite`, not the JSON files.
+
+Not `create_agent`. Agent Chat UI / Studio would still need an Agent Server; this file is only a CLI graph.
+
 ## Compression: soft summary, then hard `trim_messages`
 
 Unbounded history will blow the context window. Each `invoke` only sees what we send **this turn**.
@@ -300,4 +314,4 @@ Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-h
 
 ## Not in the code yet (next concepts)
 
-See README “Later concepts”: RAG / LangGraph / a web UI stay out of this repo for now. Chatbot facts still use regex. JSON sessions are on disk; this tiny agent is not `create_agent`.
+See README “Later concepts”: RAG / Studio / a web UI stay out of this repo for now. Chatbot facts still use regex. `chatbot.py` uses JSON; `graph_chatbot.py` uses a sqlite checkpointer. Neither is `create_agent`.

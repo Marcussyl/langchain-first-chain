@@ -2,3 +2,5 @@ langchain>=1.0.0
 langchain-ollama>=0.3.0
 langchain-core>=0.3.0
 pydantic>=2
+langgraph>=1.0.0
+langgraph-checkpoint-sqlite>=2.0.0

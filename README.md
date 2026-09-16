@@ -32,6 +32,13 @@ Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser (or st
 - **Replies**: `invoke` so we can see `tool_calls` before printing (`StrOutputParser` / `stream` would hide them)
 - **Persist sessions**: `facts` + topic notes + recent human/ai/**tool** turns in `sessions/<session_id>.json` (system message is rebuilt on load)
 
+**`graph_chatbot.py` (LangGraph twin):**
+
+- Same harvest / soft summary / hard trim / `get_time` as `chatbot.py` (imported, not copied)
+- `StateGraph` nodes `prepare` then `generate` instead of a `while True` body
+- SQLite checkpointer (`sessions/langgraph.sqlite`); `thread_id` is the session id
+- Does **not** use `create_agent`; does **not** share `sessions/*.json` with `chatbot.py`
+
 ## Prerequisites
 
 - Python 3.10+
@@ -71,6 +78,12 @@ Chatbot that remembers this session (old turns are summarized, then hard-trimmed
 python chatbot.py
 ```
 
+Same chatbot as a LangGraph (`thread_id` = session id; sqlite, not JSON):
+
+```bash
+python graph_chatbot.py
+```
+
 Paste a paragraph and print structured fields (`summary`, `paragraph_count`, `author`, `published_at`):
 
 ```bash
@@ -85,9 +98,9 @@ For `extract_paragraph.py`, each paste is a new request. Replies print in one go
 
 Keep these for the next learning slices. One concept at a time.
 
-1. **Leave for another repo** — RAG / vector stores (that compression is about documents, not chat), LangGraph multi-node graphs, FastAPI / a web UI. `create_agent` belongs there; this repo's tiny agent is one tool plus a hand-written `ToolMessage` round.
+1. **Leave for another repo** — RAG / vector stores (that compression is about documents, not chat), LangGraph Studio / Agent Chat UI / FastAPI. `graph_chatbot.py` is only the CLI twin of `chatbot.py`, not a deployed Agent Server. `create_agent` is still unused.
 
-Chatbot facts still use regex; applying Pydantic there is a later optional tweak. This JSON file is not a LangGraph checkpointer.
+Chatbot facts still use regex; applying Pydantic there is a later optional tweak. `chatbot.py` JSON is not a LangGraph checkpointer; `graph_chatbot.py` uses sqlite instead.
 
 ## Optional tweaks
 
