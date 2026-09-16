@@ -69,8 +69,8 @@ Without it you would print something like an `AIMessage(...)`.
 result = chain.invoke({'topic': topic})
 ```
 
-- **`invoke`**: wait for the full answer, then return (`first_chain.py`, and the summarizer in `chatbot.py`).
-- **`stream`**: yield chunks as they arrive (`chatbot.py` replies). Same chain, different consumption. The full string is still joined so we can append an `AIMessage`.
+- **`invoke`**: wait for the full answer, then return (`first_chain.py`, the summarizer, and chatbot replies so `tool_calls` stay visible).
+- **`stream`**: yield chunks as they arrive (not used for chatbot replies anymore; a string stream would hide tool calls).
 - **`batch`**: several inputs at once (not used yet).
 
 In `first_chain.py`, the `while True` + `input()` loop is ordinary Python. It is **not** LangChain memory. Each `invoke` is a **new, independent** request.
@@ -108,7 +108,7 @@ Backslash is an escape in bash (`.venv\Scripts\activate` becomes `.venvScriptsac
 
 ## Packages (what each one is for)
 
-- `langchain-core`: prompts, parsers, LCEL primitives.
+- `langchain-core`: prompts, parsers, LCEL primitives, `@tool`, `ToolMessage`.
 - `langchain-ollama`: `ChatOllama`.
 - `langchain`: umbrella / extra integrations; this tiny script mostly needs the two above.
 - `pydantic`: field schemas for `extract_paragraph.py` (LangChain already depends on it; listed explicitly).
@@ -157,7 +157,7 @@ Short-term memory is just a **list of messages** kept in the process:
 [system, human, ai, human, ai, ...]
 ```
 
-Each turn we append a `HumanMessage`, `invoke` the chain, then append an `AIMessage`. The next call includes those earlier messages, so "My name is Ada" then "What is my name?" can work.
+Each turn we append a `HumanMessage`, `invoke` the bound model (so `tool_calls` survive), maybe append `ToolMessage`, then append the final `AIMessage`. The next call includes those earlier messages, so "My name is Ada" then "What is my name?" can work.
 
 ```mermaid
 classDiagram
@@ -167,6 +167,7 @@ classDiagram
     BaseMessage <|-- SystemMessage : persona
     BaseMessage <|-- HumanMessage : user turn
     BaseMessage <|-- AIMessage : model turn
+    BaseMessage <|-- ToolMessage : tool result
 
     class SessionMemory {
         +messages list
@@ -185,13 +186,14 @@ classDiagram
         +include_system True
         +start_on human
     }
-    class LcelChain {
-        +invoke()
+    class ToolLoop {
+        +bind_tools get_time
+        +one ToolMessage round
     }
     SessionMemory ..> SoftSummary : when over MAX_MESSAGES
     SoftSummary ..> SessionMemory : replace old turns
     SessionMemory ..> HardTrim : backup
-    HardTrim ..> LcelChain : invoke
+    HardTrim ..> ToolLoop : invoke
 ```
 
 One turn (summarize old turns if needed, then hard-trim as backup):
@@ -203,8 +205,8 @@ sequenceDiagram
     participant Memory as messages list
     participant Soft as summary chain
     participant Hard as trim_messages
-    participant Chain as LCEL chain
-    participant Ollama as ChatOllama
+    participant Model as tool_model
+    participant Tool as get_time
 
     Note over Memory: starts with SystemMessage
     User->>CLI: user input
@@ -216,19 +218,40 @@ sequenceDiagram
     end
     CLI->>Hard: trim_messages
     Hard-->>CLI: to_send
-    CLI->>Chain: invoke to_send
-    Chain->>Ollama: chat messages
-    Ollama-->>Chain: AIMessage
-    Chain-->>CLI: reply string
-    CLI->>Memory: append AIMessage
+    CLI->>Model: invoke to_send
+    alt tool_calls
+        Model-->>CLI: AIMessage with tool_calls
+        CLI->>Tool: get_time
+        Tool-->>CLI: timestamp
+        CLI->>Memory: append ToolMessage
+        CLI->>Model: invoke again
+        Model-->>CLI: final AIMessage
+    else no tool
+        Model-->>CLI: AIMessage text
+    end
+    CLI->>Memory: append new AI/Tool messages
     CLI-->>User: bot reply
 ```
 
-`MessagesPlaceholder('messages')` means: do not template a single `{topic}`; inject this list as the prompt. The chain is still LCEL: `prompt | model | parser`. Input is `{"messages": ...}`.
+`MessagesPlaceholder('messages')` means: do not template a single `{topic}`; inject this list as the prompt. The reply chain is LCEL: `prompt | tool_model` (no string parser). Input is `{"messages": ...}`.
 
-The in-process list is still **short-term** memory: it is what this request sends to the model. **Long-term** memory is `sessions/<session_id>.json` (`facts`, `topic_notes`, human/ai turns). A new process with the same id loads that file. `SystemMessage` is not stored; `make_system` rebuilds it so the persona text can change without stale JSON.
+The in-process list is still **short-term** memory: it is what this request sends to the model. **Long-term** memory is `sessions/<session_id>.json` (`facts`, `topic_notes`, human/ai/**tool** turns). A new process with the same id loads that file. `SystemMessage` is not stored; `make_system` rebuilds it so the persona text can change without stale JSON.
 
 This is ordinary `json` + a file, not a LangGraph checkpointer. A different session id is a different file, so `ada` does not see `bob`.
+
+## One tool (`get_time`)
+
+Not `create_agent`. The model is `model.bind_tools([get_time])`. Python runs at most **one** tool round:
+
+```text
+invoke
+  -> if AIMessage.tool_calls: run get_time, append ToolMessage, invoke again
+  -> print the final text
+```
+
+`ToolMessage.tool_call_id` must match the `id` on the `AIMessage` that requested the tool. A `ToolMessage` with no preceding tool-call `AIMessage` is an invalid history — that is why hard trim uses `start_on='human'` (drop a leftover `ToolMessage` / tool-call `AIMessage` after the cut). Soft compression walks the recent tail left until it starts on a `HumanMessage` for the same reason.
+
+JSON stores `tool_calls` on `role: ai` and `role: tool` with `tool_call_id`. Reloading must keep the pair together.
 
 ## Compression: soft summary, then hard `trim_messages`
 
@@ -267,7 +290,7 @@ trim_messages(
 |-----|---------|
 | `strategy='last'` | Keep the **recent** tail; drop old turns first. `'first'` would keep the beginning and forget what you just said. |
 | `include_system=True` | Always keep the `SystemMessage` at index 0 (persona **and** the running summary). |
-| `start_on='human'` | After the cut, drop a leftover prefix until a `HumanMessage` (do not start on a dangling `AIMessage`). Does not strip the kept system message. |
+| `start_on='human'` | After the cut, drop a leftover prefix until a `HumanMessage`. Stops a dangling `ToolMessage` or tool-call `AIMessage` from being the first non-system message. |
 
 `token_counter=len` (old) counted each message as 1. That was easier to demo, but it is not how the model window works.
 
@@ -277,4 +300,4 @@ Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-h
 
 ## Not in the code yet (next concepts)
 
-See README “Later concepts”: one tool. RAG / LangGraph / a web UI stay out of this repo for now. Chatbot facts still use regex. JSON sessions are on disk; LangGraph checkpointers still wait.
+See README “Later concepts”: RAG / LangGraph / a web UI stay out of this repo for now. Chatbot facts still use regex. JSON sessions are on disk; this tiny agent is not `create_agent`.

@@ -3,12 +3,14 @@
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, trim_messages
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage, trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 
 SYSTEM_PROMPT = (
@@ -21,11 +23,13 @@ SYSTEM_PROMPT = (
     'Answer clearly in plain language. '
     'Do not confuse similar-sounding names with unrelated fields '
     '(for example, LangChain is an LLM framework, not blockchain). '
-    'Keep answers concise (a few short sentences) unless the user asks for more detail.'
+    'Keep answers concise (a few short sentences) unless the user asks for more detail. '
+    'You may call get_time when the user asks the current time; otherwise answer without it.'
 )
 
 # Soft compression still folds extra *turns* so the list does not grow forever.
-# Odd KEEP so after we append the latest HumanMessage the tail starts on human.
+# KEEP is a target; we walk left until the kept tail starts on HumanMessage
+# so a ToolMessage is never the first recent turn.
 MAX_MESSAGES_BEFORE_SUMMARY = 8
 KEEP_RECENT_MESSAGES = 7
 
@@ -62,23 +66,27 @@ FACT_LABELS = {
     'favorite_item': "The user's favorite item/brand is",
 }
 
-# 1) The message list is the prompt. MessagesPlaceholder injects it as-is.
+# 2) Local chat model via Ollama (must be running; model must be pulled)
+model = ChatOllama(model='llama3.2', temperature=0)
+
+
+@tool
+def get_time() -> str:
+    """Return the current local date and time. Use when the user asks what time it is."""
+    return datetime.now().astimezone().isoformat(timespec='seconds')
+
+
+# Reply path keeps AIMessage.tool_calls (StrOutputParser would drop them).
+tool_model = model.bind_tools([get_time])
 prompt = ChatPromptTemplate.from_messages(
     [
         MessagesPlaceholder('messages'),
     ]
 )
+reply_chain = prompt | tool_model
 
-# 2) Local chat model via Ollama (must be running; model must be pulled)
-model = ChatOllama(model='llama3.2', temperature=0)
-
-# 3) Turn the model message into a plain string
+# 3) Summarizer still wants a plain string. No tools.
 parser = StrOutputParser()
-
-# LCEL: the list of messages goes straight into the model
-chain = prompt | model | parser
-
-# Separate chain: topical notes only. Personal facts are stored in Python.
 summary_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -151,8 +159,18 @@ def format_messages_for_summary(messages: list[BaseMessage]) -> str:
         if isinstance(message, HumanMessage):
             lines.append(f'Human: {message.content}')
         elif isinstance(message, AIMessage):
-            lines.append(f'AI: {message.content}')
+            lines.append(f'AI: {message_text(message)}')
+        elif isinstance(message, ToolMessage):
+            lines.append(f'Tool: {message.content}')
     return '\n'.join(lines) or '(none)'
+
+
+def message_text(message: BaseMessage) -> str:
+    """Flatten message content to a string for printing and JSON."""
+    content = message.content
+    if isinstance(content, str):
+        return content
+    return str(content)
 
 
 def read_user_text() -> str | None:
@@ -168,6 +186,19 @@ def count_tokens(messages: list[BaseMessage]) -> int:
     return count_tokens_approximately(messages)
 
 
+def recent_starting_on_human(
+    messages: list[BaseMessage],
+    keep: int,
+) -> tuple[list[BaseMessage], list[BaseMessage]]:
+    """Split after system so the kept tail starts on HumanMessage, not ToolMessage."""
+    if len(messages) <= 1:
+        return [], list(messages)
+    start = max(1, len(messages) - keep)
+    while start > 1 and not isinstance(messages[start], HumanMessage):
+        start -= 1
+    return messages[1:start], messages[start:]
+
+
 def apply_soft_compression(
     messages: list[BaseMessage],
     running_summary: str | None,
@@ -181,8 +212,7 @@ def apply_soft_compression(
     if len(messages) <= 1 + KEEP_RECENT_MESSAGES:
         return messages, running_summary, 0
 
-    older = messages[1:-KEEP_RECENT_MESSAGES]
-    recent = messages[-KEEP_RECENT_MESSAGES:]
+    older, recent = recent_starting_on_human(messages, KEEP_RECENT_MESSAGES)
     if not older:
         return messages, running_summary, 0
 
@@ -214,15 +244,52 @@ def hard_trim(messages: list[BaseMessage]) -> list[BaseMessage]:
     )
 
 
-def stream_reply(to_send: list[BaseMessage]) -> str:
-    """Print tokens as they arrive; return the full string for chat history."""
-    print('Bot: ', end='', flush=True)
-    parts: list[str] = []
-    for chunk in chain.stream({'messages': to_send}):
-        print(chunk, end='', flush=True)
-        parts.append(chunk)
-    print()
-    return ''.join(parts)
+def tool_call_parts(call) -> tuple[str, str, dict]:
+    """Read name, id, args from a dict or ToolCall object."""
+    if isinstance(call, dict):
+        return str(call.get('name') or ''), str(call.get('id') or ''), call.get('args') or {}
+    return (
+        str(getattr(call, 'name', '') or ''),
+        str(getattr(call, 'id', '') or ''),
+        getattr(call, 'args', None) or {},
+    )
+
+
+def print_bot(message: AIMessage) -> None:
+    """Print the visible reply. Tool-only AIMessages may have empty content."""
+    print(f'Bot: {message_text(message)}')
+
+
+def run_turn(to_send: list[BaseMessage]) -> list[BaseMessage]:
+    """One model call, at most one tool round, then a final text message."""
+    first = reply_chain.invoke({'messages': to_send})
+    extra: list[BaseMessage] = [first]
+    tool_calls = getattr(first, 'tool_calls', None) or []
+    if not tool_calls:
+        print_bot(first)
+        return extra
+
+    pending = list(to_send) + extra
+    for call in tool_calls:
+        name, call_id, args = tool_call_parts(call)
+        if name == get_time.name:
+            result = get_time.invoke(args)
+        else:
+            result = f'Unknown tool: {name}'
+        print(f'(tool: {name} -> {result})')
+        tool_msg = ToolMessage(
+            content=str(result),
+            tool_call_id=call_id,
+            name=name,
+        )
+        extra.append(tool_msg)
+        pending.append(tool_msg)
+
+    # Cap at one tool round: do not loop even if the follow-up still has tool_calls.
+    final = reply_chain.invoke({'messages': pending})
+    extra.append(final)
+    print_bot(final)
+    return extra
 
 
 def session_file(session_id: str) -> Path:
@@ -241,19 +308,40 @@ def read_session_id() -> str:
         print('Use only letters, digits, ".", "_", or "-".')
 
 
-def messages_to_json(messages: list[BaseMessage]) -> list[dict[str, str]]:
-    """Serialize human/ai turns only. SystemMessage is rebuilt on load."""
-    rows: list[dict[str, str]] = []
+def messages_to_json(messages: list[BaseMessage]) -> list[dict]:
+    """Serialize human/ai/tool turns. SystemMessage is rebuilt on load."""
+    rows: list[dict] = []
     for message in messages:
         if isinstance(message, HumanMessage):
-            rows.append({'role': 'human', 'content': str(message.content)})
+            rows.append({'role': 'human', 'content': message_text(message)})
         elif isinstance(message, AIMessage):
-            rows.append({'role': 'ai', 'content': str(message.content)})
+            row: dict = {'role': 'ai', 'content': message_text(message)}
+            tool_calls = getattr(message, 'tool_calls', None) or []
+            if tool_calls:
+                row['tool_calls'] = [
+                    {
+                        'name': name,
+                        'args': args,
+                        'id': call_id,
+                        'type': 'tool_call',
+                    }
+                    for name, call_id, args in (tool_call_parts(call) for call in tool_calls)
+                ]
+            rows.append(row)
+        elif isinstance(message, ToolMessage):
+            rows.append(
+                {
+                    'role': 'tool',
+                    'content': message_text(message),
+                    'tool_call_id': message.tool_call_id,
+                    'name': message.name or '',
+                }
+            )
     return rows
 
 
 def messages_from_json(rows: list) -> list[BaseMessage]:
-    """Rebuild human/ai turns. Unknown roles fail the whole load."""
+    """Rebuild human/ai/tool turns. Unknown roles fail the whole load."""
     history: list[BaseMessage] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -265,7 +353,19 @@ def messages_from_json(rows: list) -> list[BaseMessage]:
         if role == 'human':
             history.append(HumanMessage(content=content))
         elif role == 'ai':
-            history.append(AIMessage(content=content))
+            tool_calls = row.get('tool_calls')
+            if tool_calls:
+                history.append(AIMessage(content=content, tool_calls=tool_calls))
+            else:
+                history.append(AIMessage(content=content))
+        elif role == 'tool':
+            tool_call_id = row.get('tool_call_id')
+            if not isinstance(tool_call_id, str) or not tool_call_id:
+                raise ValueError('tool_call_id required')
+            name = row.get('name') or get_time.name
+            history.append(
+                ToolMessage(content=content, tool_call_id=tool_call_id, name=name)
+            )
         else:
             raise ValueError(f'unknown role: {role}')
     return history
@@ -283,7 +383,7 @@ def pinned_facts(raw: dict) -> dict[str, str]:
 def load_session(
     path: Path,
 ) -> tuple[dict[str, str], str | None, list[BaseMessage], str]:
-    """Load facts, topic notes, and human/ai messages. status is new/loaded/failed."""
+    """Load facts, topic notes, and human/ai/tool messages. status is new/loaded/failed."""
     if not path.exists():
         return {}, None, [], 'new'
     try:
@@ -333,7 +433,8 @@ if __name__ == '__main__':
     messages: list[BaseMessage] = [make_system(facts, running_summary), *history]
 
     print('Chatbot with short-term memory plus JSON on disk. Empty input is ignored; type q to quit.')
-    print('Try: tell it your name, quit, restart with the same session id, then ask "What is my name?"')
+    print('Try: tell it your name, or ask "What time is it?" (get_time tool).')
+    print('Same session id after quit still remembers facts and recent turns.')
     print(f'Hard-trim budget: ~{MAX_CONTEXT_TOKENS} tokens (approximate).')
     if status == 'loaded':
         print(f'(session: {session_id}  loaded {len(history)} messages)')
@@ -373,8 +474,8 @@ if __name__ == '__main__':
         if running_summary:
             print(f'(topic notes: {running_summary})')
 
-        reply = stream_reply(to_send)
+        new_messages = run_turn(to_send)
         print()
 
-        messages.append(AIMessage(content=reply))
+        messages.extend(new_messages)
         save_session(path, session_id, facts, running_summary, messages)
