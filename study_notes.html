@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study notes — langchain-first-chain</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#e8eef2',
+        primaryTextColor: '#1a2332',
+        primaryBorderColor: '#5b7c8d',
+        lineColor: '#5b7c8d',
+        secondaryColor: '#f4efe6',
+        tertiaryColor: '#ffffff',
+        fontFamily: 'IBM Plex Mono, monospace',
+      },
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --bg-elev: #fffdf8;
+      --ink: #1a2332;
+      --muted: #5c6570;
+      --line: #d4cdc0;
+      --accent: #2f5d50;
+      --accent-soft: #dce8e3;
+      --code-bg: #e9e4da;
+      --warn-bg: #f7edd8;
+      --max: 52rem;
+    }
+
+    .diagram-caption {
+      margin: -0.35rem 0 1.25rem;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.03em;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, #e4ebe7 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 0%, #ebe4d6 0%, transparent 50%),
+        var(--bg);
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 1.05rem;
+      line-height: 1.65;
+    }
+
+    .wrap {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    header p.eyebrow {
+      margin: 0 0 0.35rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    nav.toc {
+      margin: 1.5rem 0 2rem;
+      padding: 1rem 1.1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+
+    nav.toc strong {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    nav.toc ol {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    nav.toc a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+
+    nav.toc a:hover {
+      border-bottom-color: var(--accent);
+      color: var(--accent);
+    }
+
+    h2 {
+      margin: 2.5rem 0 0.85rem;
+      padding-top: 0.5rem;
+      font-size: 1.35rem;
+      font-weight: 700;
+      border-top: 1px solid var(--line);
+    }
+
+    h2:first-of-type { border-top: 0; }
+
+    h3 {
+      margin: 1.5rem 0 0.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    p, li { max-width: 42rem; }
+
+    ul, ol { padding-left: 1.3rem; }
+
+    li + li { margin-top: 0.25rem; }
+
+    a { color: var(--accent); }
+
+    code, .mono {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.88em;
+    }
+
+    :not(pre) > code {
+      padding: 0.1em 0.35em;
+      background: var(--code-bg);
+      border-radius: 3px;
+    }
+
+    pre {
+      margin: 1rem 0;
+      padding: 0.9rem 1rem;
+      overflow-x: auto;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    pre code {
+      padding: 0;
+      background: none;
+    }
+
+    table {
+      width: 100%;
+      margin: 1rem 0;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 253, 248, 0.7); }
+
+    .callout {
+      margin: 1rem 0;
+      padding: 0.85rem 1rem;
+      background: var(--warn-bg);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .callout p { margin: 0; }
+
+    .mermaid {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+
+    .new {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.05rem 0.4rem;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-radius: 2px;
+      vertical-align: middle;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">langchain-first-chain</p>
+      <h1>Study notes</h1>
+      <p class="lede">What this repo actually uses. Not a full LangChain textbook. Open in a browser; Mermaid diagrams render from the CDN script above.</p>
+    </header>
+
+    <nav class="toc" aria-label="Table of contents">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#scripts">Scripts and modules</a></li>
+        <li><a href="#journey">Learning journey</a></li>
+        <li><a href="#today">Today’s new concepts</a></li>
+        <li><a href="#big-picture">Big picture (LCEL)</a></li>
+        <li><a href="#prompt">Prompt</a></li>
+        <li><a href="#model">ChatOllama vs Ollama</a></li>
+        <li><a href="#parser">Parser</a></li>
+        <li><a href="#running">Running the chain</a></li>
+        <li><a href="#hallucination">Hallucination</a></li>
+        <li><a href="#env">Python env (uv)</a></li>
+        <li><a href="#packages">Packages</a></li>
+        <li><a href="#structured">Structured output</a></li>
+        <li><a href="#chatbot">Chatbot memory</a></li>
+        <li><a href="#tool">One tool (get_time)</a></li>
+        <li><a href="#langgraph">LangGraph twin</a></li>
+        <li><a href="#compression">Soft then hard compression</a></li>
+        <li><a href="#next">Not in the code yet</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="scripts">Scripts and modules</h2>
+    <ul>
+      <li><code>first_chain.py</code> — one prompt, one answer, no memory between questions.</li>
+      <li><code>extract_paragraph.py</code> — one paste, Pydantic fields (<code>summary</code>, <code>paragraph_count</code>, <code>author</code>, <code>published_at</code>).</li>
+      <li><code>chatbot.py</code> — multi-turn messages + <code>trim_messages</code> + JSON sessions.</li>
+      <li><code>graph_chatbot.py</code> — CLI entry for the LangGraph twin; sqlite checkpointer.</li>
+      <li><code>graph_core.py</code> / <code>graph_server.py</code> — shared graph + <code>langgraph.dev</code> export (<code>tutor</code>).</li>
+      <li><code>settings.py</code> — <code>OLLAMA_MODEL</code> / temperature from env or <code>.env</code>.</li>
+    </ul>
+
+    <div class="mermaid">
+flowchart TB
+  FC[first_chain.py]
+  EP[extract_paragraph.py]
+  CB[chatbot.py]
+  GC[graph_chatbot.py CLI]
+  Core[graph_core.py]
+  Srv[graph_server.py / tutor]
+  FC --> EP --> CB --> Core
+  Core --> GC
+  Core --> Srv
+    </div>
+    <p class="diagram-caption">flowchart — how the learning scripts stack</p>
+
+    <h2 id="journey">Learning journey</h2>
+    <p>Mermaid <code>journey</code> view of the path so far (scores 1–5 = how solid it felt).</p>
+    <div class="mermaid">
+journey
+  title First LangGraph learning path
+  section Basics
+    Run Ollama locally: 5: You
+    LCEL first_chain: 4: You
+    Structured extract: 4: You
+  section Memory and tools
+    chatbot with soft/hard trim: 3: You
+    graph_chatbot CLI: 4: You
+  section Dev server
+    langgraph.dev + Studio: 5: You, Auto
+    Understand checkpoint / thread: 4: You
+    Optional LangSmith API key: 2: You
+    </div>
+    <p class="diagram-caption">journey — First LangGraph learning path</p>
+
+    <h2 id="today">Today’s new concepts <span class="new">new</span></h2>
+    <p>Concepts reinforced while wiring <code>langgraph.dev</code> + Studio (Nov 2026 session).</p>
+
+    <h3>uv instead of pip + venv by hand</h3>
+    <ul>
+      <li><code>uv sync</code> installs from <code>pyproject.toml</code> / <code>uv.lock</code>.</li>
+      <li><code>uv run python …</code> runs without activating the venv.</li>
+      <li>Dev tools: <code>uv sync --group dev</code> (includes <code>langgraph-cli[inmem]</code> + Windows <code>colorama</code>).</li>
+    </ul>
+
+    <h3>Who picks the Ollama model?</h3>
+    <p><code>ollama serve</code> exposes an HTTP API of <strong>already pulled</strong> models. It does not choose for you. Your code sends <code>model: "…"</code> on each request (<code>ChatOllama(model=OLLAMA_MODEL)</code>). Missing name → 404.</p>
+    <p>GPU: Ollama auto-uses the GPU when available (<code>ollama ps</code> shows <code>PROCESSOR</code>); Python does not enable CUDA itself.</p>
+    <div class="mermaid">
+sequenceDiagram
+  participant App as Python ChatOllama
+  participant API as Ollama :11434
+  participant Disk as Pulled models
+  App->>API: chat model equals OLLAMA_MODEL
+  API->>Disk: lookup name
+  alt installed
+    Disk-->>API: load weights
+    API-->>App: stream reply
+  else missing
+    API-->>App: 404 model not found
+  end
+    </div>
+    <p class="diagram-caption">sequenceDiagram — client picks the model name</p>
+
+    <h3>Three “servers” (do not confuse them)</h3>
+    <table>
+      <thead>
+        <tr><th>Process</th><th>Port (default)</th><th>Job</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>ollama serve</code></td><td>11434</td><td>Run local LLMs</td></tr>
+        <tr><td><code>langgraph.dev</code></td><td>2024</td><td>LangGraph HTTP API for your graph</td></tr>
+        <tr><td>LangGraph Studio UI</td><td>browser (LangSmith host)</td><td>Visual debugger; <code>baseUrl</code> points at :2024</td></tr>
+      </tbody>
+    </table>
+    <div class="mermaid">
+flowchart LR
+  Studio[LangGraph Studio] -->|baseUrl| LGAPI[langgraph.dev :2024]
+  Docs["/docs OpenAPI"] --> LGAPI
+  LGAPI --> Graph[tutor graph]
+  Graph --> Ollama[Ollama :11434]
+    </div>
+    <p class="diagram-caption">flowchart — Studio and /docs both hit the same API</p>
+    <p><code>/docs</code> on the API host is the <strong>real</strong> OpenAPI console (not a fake demo). Local dev persistence ≠ production deploy.</p>
+
+    <h3>Studio vs LangSmith</h3>
+    <p><strong>Studio</strong> is the LangSmith-hosted UI for LangGraph. Optional <code>LANGSMITH_API_KEY</code> in <code>.env</code> enables cloud traces; without it, local chat still works — you just will not see LangSmith runs.</p>
+
+    <h3>LangGraph nodes are custom</h3>
+    <p>No fixed official node names. You define functions and wire edges. Ours:</p>
+    <div class="mermaid">
+flowchart LR
+  START --> ingest
+  ingest --> prepare
+  prepare --> generate
+  generate --> END
+    </div>
+    <p class="diagram-caption">flowchart — tutor pipeline nodes</p>
+    <table>
+      <thead>
+        <tr><th>Node</th><th>Role</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>ingest</code></td><td>Harvest personal <code>facts</code> from the latest human text (regex)</td></tr>
+        <tr><td><code>prepare</code></td><td>Rebuild <code>SystemMessage</code> + soft compression</td></tr>
+        <tr><td><code>generate</code></td><td>Hard trim + model / one tool round</td></tr>
+      </tbody>
+    </table>
+    <p><code>ingest</code> and <code>prepare</code> could be merged; split for Studio clarity. <code>n_summarized</code> = how many older messages soft-compression folded this turn (mostly for debug logs).</p>
+
+    <h3>Common graph patterns (habits, not required APIs)</h3>
+    <ul>
+      <li><strong>Pipeline</strong> — fixed steps (this repo).</li>
+      <li><strong>ReAct</strong> — <code>llm</code> ↔ <code>tools</code> loop.</li>
+      <li><strong>Router</strong> — classify then branch.</li>
+      <li><strong>HITL</strong> — <strong>Human-In-The-Loop</strong>: pause for approval (<code>interrupt</code>).</li>
+      <li><strong><code>create_agent</code></strong> — higher-level ReAct wrapper (still unused here).</li>
+    </ul>
+    <div class="mermaid">
+flowchart TB
+  subgraph pipeline [Pipeline this repo]
+    P1[ingest] --> P2[prepare] --> P3[generate]
+  end
+  subgraph react [ReAct pattern]
+    A1[llm] --> T1[tools]
+    T1 -->|more tool_calls| A1
+    T1 -->|done| E1[end]
+  end
+  subgraph hitl [HITL]
+    H1[draft] --> H2[interrupt human]
+    H2 --> H3[execute]
+  end
+    </div>
+    <p class="diagram-caption">flowchart — common patterns side by side</p>
+
+    <h3>Checkpointing</h3>
+    <ul>
+      <li>Within one run: a snapshot after each step (Studio timeline).</li>
+      <li>Next turn: resume from that thread’s <strong>latest</strong> state.</li>
+      <li>You can target an older snapshot with <code>checkpoint_id</code> (time travel).</li>
+      <li>CLI: <code>SqliteSaver</code> → <code>sessions/langgraph.sqlite</code>.</li>
+      <li>Studio / <code>langgraph.dev</code>: platform persistence — <strong>must not</strong> compile the exported graph with a custom checkpointer.</li>
+    </ul>
+    <div class="mermaid">
+flowchart TB
+  T1[TURN1 run] --> C1a[ckpt after ingest]
+  C1a --> C1b[ckpt after prepare]
+  C1b --> C1c[ckpt after generate]
+  C1c --> T2[TURN2 starts from latest]
+  T2 --> C2[new step checkpoints]
+  C1b -.->|optional checkpoint_id| R[time travel resume]
+    </div>
+    <p class="diagram-caption">flowchart — per-step checkpoints vs next-turn latest</p>
+
+    <h3><code>add_messages</code> + Studio input</h3>
+    <p>Studio usually sends only the new human message. State uses <code>Annotated[list, add_messages]</code>. Soft compress / system rebuild replaces the channel with <code>RemoveMessage(id=REMOVE_ALL_MESSAGES)</code> then the new list. CLI also invokes with only the new <code>HumanMessage</code>.</p>
+
+    <h3>Git branch for this work</h3>
+    <p>Feature work lived on <code>feat/langgraph-dev-server</code>, then merged into <code>main</code> with <code>--no-ff</code>.</p>
+    <div class="mermaid">
+gitGraph
+  commit id: "ea8e5cb origin/main"
+  branch feat_langgraph_dev_server
+  commit id: "3e6b60e feat"
+  checkout main
+  merge feat_langgraph_dev_server id: "127dd98 merge"
+    </div>
+    <p class="diagram-caption">gitGraph — local branch then merge</p>
+
+    <h2 id="big-picture">Big picture</h2>
+    <p>The app is one <strong>LCEL chain</strong>:</p>
+    <div class="mermaid">
+flowchart LR
+  Topic[user topic dict] --> Prompt[prompt]
+  Prompt --> Model[model]
+  Model --> Parser[parser]
+  Parser --> Out[string on screen]
+    </div>
+    <p class="diagram-caption">flowchart — LCEL mental model</p>
+    <ul>
+      <li><strong>Prompt</strong>: turn a dict like <code>{"topic": "LCEL"}</code> into chat messages.</li>
+      <li><strong>Model</strong>: send those messages to a local LLM (Ollama).</li>
+      <li><strong>Parser</strong>: turn the model reply into a plain <code>str</code>.</li>
+    </ul>
+    <p>LCEL composes steps with <code>|</code>:</p>
+    <pre><code>chain = prompt | model | parser</code></pre>
+    <p>Each piece is a <strong>Runnable</strong>. <code>invoke</code> runs them in order. Input is a <strong>dict</strong> because the prompt has named variables.</p>
+
+    <h2 id="prompt">Prompt: <code>ChatPromptTemplate</code></h2>
+    <table>
+      <thead>
+        <tr><th>API</th><th>What it is</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>from_template("...{topic}...")</code></td><td>One human message. Fine for a first demo.</td></tr>
+        <tr><td><code>from_messages([...])</code></td><td>List of roles. This project uses this.</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><strong>system</strong>: standing instructions (tutor; do not mix up names).</li>
+      <li><strong>human</strong>: user request; <code>{topic}</code> filled at invoke time.</li>
+    </ul>
+    <p><code>"{topic}"</code> is not an f-string. LangChain substitutes on <code>chain.invoke({"topic": topic})</code>.</p>
+
+    <h2 id="model">Model: <code>ChatOllama</code> vs Ollama</h2>
+    <table>
+      <thead>
+        <tr><th>Piece</th><th>What it is</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Ollama</strong></td><td>Native app / service. HTTP default <code>localhost:11434</code>. Holds pulled models.</td></tr>
+        <tr><td><strong>ChatOllama</strong></td><td>Python client in <code>.venv</code> (via <code>uv sync</code>).</td></tr>
+      </tbody>
+    </table>
+    <p>If Ollama is down, the Python chain fails even after a successful <code>uv sync</code>. <code>temperature=0</code> is more deterministic, not “always correct”.</p>
+    <div class="callout">
+      <p>Port already in use on <code>ollama serve</code> usually means Ollama is already running (tray app) — that is fine.</p>
+    </div>
+
+    <h2 id="parser">Parser: <code>StrOutputParser</code></h2>
+    <p>Chat models return a message object. The parser pulls <code>.content</code> as a <code>str</code>. Without it you print something like <code>AIMessage(...)</code>.</p>
+
+    <h2 id="running">Running the chain</h2>
+    <pre><code>result = chain.invoke({'topic': topic})</code></pre>
+    <ul>
+      <li><strong>invoke</strong>: wait for the full answer (<code>first_chain.py</code>, summarizer, chatbot replies so <code>tool_calls</code> stay visible).</li>
+      <li><strong>stream</strong>: yield chunks (not used for chatbot replies; string stream would hide tool calls).</li>
+      <li><strong>batch</strong>: several inputs at once (not used yet).</li>
+    </ul>
+    <p>In <code>first_chain.py</code>, the <code>while True</code> loop is ordinary Python — <strong>not</strong> LangChain memory. Each invoke is independent. <code>chatbot.py</code> is the version that passes history.</p>
+
+    <h2 id="hallucination">Hallucination</h2>
+    <p>An early run explained LangChain as a <strong>blockchain</strong> framework. The pipeline was fine; the model guessed from “Chain”.</p>
+    <ul>
+      <li>A working chain ≠ a true answer.</li>
+      <li>Small local models hallucinate more with short prompts.</li>
+      <li>A system message that names the confusion is a cheap mitigation, not a guarantee.</li>
+    </ul>
+
+    <h2 id="env">Python env (setup, not LCEL)</h2>
+    <ul>
+      <li><strong>In <code>.venv</code></strong>: deps from <code>pyproject.toml</code> / <code>uv.lock</code> (<code>uv sync</code>).</li>
+      <li><strong>Global</strong>: <a href="https://docs.astral.sh/uv/">uv</a>, Ollama, Git, editor.</li>
+    </ul>
+    <p>Prefer <code>uv run python chatbot.py</code>. Optional overrides: copy <code>.env.example</code> → <code>.env</code> (<code>OLLAMA_MODEL</code>, optional <code>LANGSMITH_API_KEY</code>).</p>
+
+    <h2 id="packages">Packages</h2>
+    <ul>
+      <li><code>langchain-core</code>: prompts, parsers, LCEL, <code>@tool</code>, <code>ToolMessage</code>.</li>
+      <li><code>langchain-ollama</code>: <code>ChatOllama</code>.</li>
+      <li><code>langchain</code>: umbrella / extras.</li>
+      <li><code>pydantic</code>: schemas for <code>extract_paragraph.py</code>.</li>
+      <li><code>langgraph</code> / <code>langgraph-checkpoint-sqlite</code>: graph + CLI sqlite checkpointer.</li>
+      <li><code>langgraph-cli[inmem]</code> (dev group): <code>langgraph.dev</code>.</li>
+    </ul>
+
+    <h2 id="structured">Structured output (<code>extract_paragraph.py</code>)</h2>
+    <p>Structured output gives <strong>typed fields</strong> instead of one string:</p>
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Type</th><th>Rule</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>summary</code></td><td><code>str</code></td><td>A few sentences covering the paste.</td></tr>
+        <tr><td><code>paragraph_count</code></td><td><code>int</code></td><td>How many paragraphs the model thinks exist.</td></tr>
+        <tr><td><code>author</code></td><td><code>str | None</code></td><td>Only if stated; else null. Do not invent.</td></tr>
+        <tr><td><code>published_at</code></td><td><code>str | None</code></td><td><code>YYYY-MM-DD</code> only if stated.</td></tr>
+      </tbody>
+    </table>
+    <pre><code>structured_model = model.with_structured_output(
+  ParagraphExtract,
+  method='json_schema',
+  include_raw=True,
+)
+chain = prompt | structured_model</code></pre>
+    <p><code>include_raw=True</code>: bad parse → dict with error instead of crashing. Python <code>count_paragraphs</code> is printed beside the model’s count for comparison. Chatbot facts still use regex for now.</p>
+
+    <h2 id="chatbot">Chatbot memory (<code>chatbot.py</code>)</h2>
+    <p>Short-term memory is a <strong>list of messages</strong>:</p>
+    <pre><code>[system, human, ai, human, ai, ...]</code></pre>
+    <p>Each turn: append <code>HumanMessage</code>, invoke bound model, maybe <code>ToolMessage</code>, append final <code>AIMessage</code>.</p>
+
+    <div class="mermaid">
+classDiagram
+  class BaseMessage {
+    +content str
+  }
+  BaseMessage &lt;|-- SystemMessage : persona
+  BaseMessage &lt;|-- HumanMessage : user turn
+  BaseMessage &lt;|-- AIMessage : model turn
+  BaseMessage &lt;|-- ToolMessage : tool result
+
+  class SessionMemory {
+    +messages list
+    +running_summary str
+    +append()
+  }
+  SessionMemory "1" *-- "*" BaseMessage : system plus recent turns
+
+  class SoftSummary {
+    +fold older turns into running_summary
+    +write summary onto SystemMessage
+  }
+  class HardTrim {
+    +token budget
+    +strategy last
+    +include_system True
+    +start_on human
+  }
+  class ToolLoop {
+    +bind_tools get_time
+    +one ToolMessage round
+  }
+  SessionMemory ..&gt; SoftSummary : when over budget
+  SoftSummary ..&gt; SessionMemory : replace old turns
+  SessionMemory ..&gt; HardTrim : backup
+  HardTrim ..&gt; ToolLoop : invoke
+    </div>
+
+    <div class="mermaid">
+sequenceDiagram
+  actor User
+  participant CLI as chatbot.py
+  participant Memory as messages list
+  participant Soft as summary chain
+  participant Hard as trim_messages
+  participant Model as tool_model
+  participant Tool as get_time
+
+  Note over Memory: starts with SystemMessage
+  User-&gt;&gt;CLI: user input
+  CLI-&gt;&gt;Memory: append HumanMessage
+  alt list long or too many tokens
+    CLI-&gt;&gt;Soft: summarize older turns
+    Soft--&gt;&gt;CLI: running summary
+    CLI-&gt;&gt;Memory: system plus summary plus recent turns
+  end
+  CLI-&gt;&gt;Hard: trim_messages
+  Hard--&gt;&gt;CLI: to_send
+  CLI-&gt;&gt;Model: invoke to_send
+  alt tool_calls
+    Model--&gt;&gt;CLI: AIMessage with tool_calls
+    CLI-&gt;&gt;Tool: get_time
+    Tool--&gt;&gt;CLI: timestamp
+    CLI-&gt;&gt;Memory: append ToolMessage
+    CLI-&gt;&gt;Model: invoke again
+    Model--&gt;&gt;CLI: final AIMessage
+  else no tool
+    Model--&gt;&gt;CLI: AIMessage text
+  end
+  CLI-&gt;&gt;Memory: append new AI/Tool messages
+  CLI--&gt;&gt;User: bot reply
+    </div>
+
+    <p><code>MessagesPlaceholder('messages')</code> injects the list. Reply chain: <code>prompt | tool_model</code> (no string parser). Long-term file memory: <code>sessions/&lt;id&gt;.json</code>. That is ordinary JSON, not a LangGraph checkpointer.</p>
+
+    <h2 id="tool">One tool (<code>get_time</code>)</h2>
+    <p>Not <code>create_agent</code>. At most one tool round:</p>
+    <div class="mermaid">
+flowchart TD
+  Inv1[invoke model] --> Check{tool_calls?}
+  Check -->|yes| Run[run get_time]
+  Run --> TM[append ToolMessage]
+  TM --> Inv2[invoke again]
+  Inv2 --> Print[print final text]
+  Check -->|no| Print
+    </div>
+    <p class="diagram-caption">flowchart — one-round tool loop</p>
+    <pre><code>invoke
+  -> if AIMessage.tool_calls: run get_time, append ToolMessage, invoke again
+  -> print the final text</code></pre>
+    <p><code>ToolMessage.tool_call_id</code> must match the requesting AI tool call. Hard trim uses <code>start_on='human'</code> so a cut never starts on a dangling tool message.</p>
+
+    <h2 id="langgraph">LangGraph twin (<code>graph_core</code> + CLI / Server)</h2>
+    <p><code>chatbot.py</code> owns turn helpers. <code>graph_core.py</code> wires three nodes; <code>graph_chatbot.py</code> is CLI; <code>graph_server.py</code> exports <code>graph</code> for <code>langgraph.json</code>.</p>
+
+    <div class="mermaid">
+flowchart LR
+  START --> ingest --> prepare --> generate --> END
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Entry</th><th>Checkpoint</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>uv run python graph_chatbot.py</code></td><td><code>sessions/langgraph.sqlite</code> (SqliteSaver)</td></tr>
+        <tr><td><code>uv run langgraph.dev</code> (Studio)</td><td>Platform / inmem (no custom checkpointer on export)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="mermaid">
+sequenceDiagram
+  participant U as Studio TURN 2
+  participant CP as Checkpoint thread
+  participant G as Graph
+
+  U-&gt;&gt;G: new HumanMessage only
+  CP-&gt;&gt;G: restore messages / facts / notes
+  Note over G: add_messages appends human
+  G-&gt;&gt;G: ingest then prepare then generate
+  G-&gt;&gt;CP: write updated state
+    </div>
+
+    <p>Model name: <code>settings.OLLAMA_MODEL</code>. Not <code>create_agent</code>. Agent Chat UI / FastAPI product fronts stay out of this repo.</p>
+
+    <h2 id="compression">Compression: soft summary, then hard <code>trim_messages</code></h2>
+    <div class="mermaid">
+flowchart TD
+  Full[full messages] --> Soft{too many msgs or tokens?}
+  Soft -->|yes| Sum[soft summarize older turns]
+  Sum --> Pin[facts stay on SystemMessage]
+  Soft -->|no| Hard
+  Pin --> Hard[hard trim_messages by tokens]
+  Hard --> Model[model]
+    </div>
+    <p class="diagram-caption">flowchart — soft then hard compression</p>
+    <pre><code>full messages
+  -> if too many messages OR tokens: soft-summarize older turns
+     (facts stay in a Python dict on SystemMessage)
+  -> trim_messages by approximate tokens (hard backup)
+  -> model</code></pre>
+    <p><strong>Soft</strong>: fold old turns into topic notes; pin personal facts in Python so a bad summarizer cannot wipe names.</p>
+    <p><strong>Hard</strong>: token budget <code>MAX_CONTEXT_TOKENS = 2048</code>, <code>strategy='last'</code>, <code>include_system=True</code>, <code>start_on='human'</code>.</p>
+    <pre><code>trim_messages(
+  messages,
+  max_tokens=MAX_CONTEXT_TOKENS,
+  token_counter='approximate',
+  strategy='last',
+  include_system=True,
+  start_on='human',
+)</code></pre>
+
+    <h2 id="next">Not in the code yet</h2>
+    <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio are in.</p>
+    <div class="mermaid">
+flowchart LR
+  Now[Now: pipeline + Studio] --> N1[conditional edges / tool loop]
+  N1 --> N2[HITL or create_agent]
+  N2 --> N3[streaming / LangSmith]
+  N3 --> Later[RAG / Deploy]
+    </div>
+    <p class="diagram-caption">flowchart — suggested next topics</p>
+    <p>Next learning candidates: conditional edges / tool loops, HITL interrupts, streaming events, <code>create_agent</code>, optional LangSmith tracing.</p>
+
+    <footer>
+      <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN).</p>
+    </footer>
+  </div>
+</body>
+</html>

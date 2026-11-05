@@ -2,6 +2,8 @@
 
 Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser (or structured Pydantic fields), running fully local with **Ollama** (no API key).
 
+Learning notes (HTML, open in a browser): [`study_notes.html`](study_notes.html).
+
 ## What you learn
 
 **`first_chain.py` (one-shot explain):**
