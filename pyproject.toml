@@ -1,0 +1,36 @@
+[project]
+name = 'langchain-first-chain'
+version = '0.1.0'
+description = 'Hands-on starter for LangChain LCEL with local Ollama'
+requires-python = '>=3.10'
+dependencies = [
+  'langchain>=1.0.0',
+  'langchain-ollama>=0.3.0',
+  'langchain-core>=0.3.0',
+  'pydantic>=2',
+  'langgraph>=1.0.0',
+  'langgraph-checkpoint-sqlite>=2.0.0',
+]
+
+[dependency-groups]
+dev = [
+  'langgraph-cli[inmem]',
+  # Windows: langgraph-api ConsoleRenderer needs colorama
+  'colorama',
+]
+
+[build-system]
+requires = ['hatchling']
+build-backend = 'hatchling.build'
+
+# Flat layout: ship root modules so langgraph.json dependencies ["."] can install.
+[tool.hatch.build.targets.wheel]
+only-include = [
+  'settings.py',
+  'chatbot.py',
+  'first_chain.py',
+  'extract_paragraph.py',
+  'graph_core.py',
+  'graph_server.py',
+  'graph_chatbot.py',
+]

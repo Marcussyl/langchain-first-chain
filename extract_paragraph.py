@@ -5,6 +5,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 
+from settings import OLLAMA_MODEL, OLLAMA_TEMPERATURE
+
 # Flat schema so local Llama + Ollama json_schema stays reliable.
 class ParagraphExtract(BaseModel):
   """Metadata extracted from pasted text. Do not invent missing fields."""
@@ -48,7 +50,7 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 # 2) Local chat model via Ollama (must be running; model must be pulled)
-model = ChatOllama(model='llama3.2', temperature=0)
+model = ChatOllama(model=OLLAMA_MODEL, temperature=OLLAMA_TEMPERATURE)
 
 # 3) Structured output instead of StrOutputParser.
 # include_raw=True: a bad parse is a dict, not a crash.

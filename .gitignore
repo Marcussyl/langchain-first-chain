@@ -15,12 +15,16 @@ env/
 # Env / secrets
 .env
 .env.*
+!.env.example
 
 # Local chatbot sessions (keep the folder, not the JSON)
 sessions/*.json
 sessions/*.json.tmp
 sessions/*.sqlite
 sessions/*.sqlite-*
+
+# langgraph.dev local runtime persistence
+.langgraph_api/
 
 # IDE / OS
 .idea/
