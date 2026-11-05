@@ -137,6 +137,31 @@ Keep these for the next learning slices. One concept at a time.
 
 Chatbot facts still use regex; applying Pydantic there is a later optional tweak. `chatbot.py` JSON is not a LangGraph checkpointer; CLI and Studio each use their own sqlite file.
 
+## Commits (Conventional Commits)
+
+Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```text
+<type>(optional-scope): <description>
+```
+
+Examples: `feat: add get_time tool`, `docs: update study notes`, `chore: ignore .langgraph_api`.
+
+Allowed types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci` `chore` `revert` `merge`.
+
+### Local hook
+
+```bash
+uv sync --group dev
+uv run pre-commit install --hook-type commit-msg
+```
+
+After that, non-conforming `git commit` messages are rejected. New clones need to run the install again. Prefer fixing the message over `git commit --no-verify`.
+
+### CI
+
+Pull requests targeting `main` or `dev` run [`.github/workflows/conventional-commits.yml`](.github/workflows/conventional-commits.yml) and check the same types.
+
 ## Optional tweaks
 
 - Change the system prompt

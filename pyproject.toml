@@ -17,6 +17,7 @@ dev = [
   'langgraph-cli[inmem]',
   # Windows: langgraph-api ConsoleRenderer needs colorama
   'colorama',
+  'pre-commit',
 ]
 
 [build-system]

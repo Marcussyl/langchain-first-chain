@@ -1,0 +1,21 @@
+name: Conventional Commits
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  conventional-commits:
+    name: Check commit messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: webiny/action-conventional-commits@v1.4.2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          allowed-commit-types: 'feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert,merge'
