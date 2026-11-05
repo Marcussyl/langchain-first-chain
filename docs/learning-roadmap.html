@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Learning roadmap — langchain-first-chain</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#e8eef2',
+        primaryTextColor: '#1a2332',
+        primaryBorderColor: '#5b7c8d',
+        lineColor: '#5b7c8d',
+        secondaryColor: '#f4efe6',
+        tertiaryColor: '#ffffff',
+        fontFamily: 'IBM Plex Mono, monospace',
+      },
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --bg-elev: #fffdf8;
+      --ink: #1a2332;
+      --muted: #5c6570;
+      --line: #d4cdc0;
+      --accent: #2f5d50;
+      --accent-soft: #dce8e3;
+      --code-bg: #e9e4da;
+      --warn-bg: #f7edd8;
+      --max: 52rem;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, #e4ebe7 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 0%, #ebe4d6 0%, transparent 50%),
+        var(--bg);
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 1.05rem;
+      line-height: 1.65;
+    }
+
+    .wrap {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    header p.eyebrow {
+      margin: 0 0 0.35rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    nav.toc {
+      margin: 1.5rem 0 2rem;
+      padding: 1rem 1.1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+
+    nav.toc strong {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    nav.toc ol {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    nav.toc a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+
+    nav.toc a:hover {
+      border-bottom-color: var(--accent);
+      color: var(--accent);
+    }
+
+    h2 {
+      margin: 2.5rem 0 0.85rem;
+      padding-top: 0.5rem;
+      font-size: 1.35rem;
+      font-weight: 700;
+      border-top: 1px solid var(--line);
+    }
+
+    h2:first-of-type { border-top: 0; }
+
+    h3 {
+      margin: 1.5rem 0 0.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    p, li { max-width: 42rem; }
+
+    ul, ol { padding-left: 1.3rem; }
+
+    li + li { margin-top: 0.25rem; }
+
+    a { color: var(--accent); }
+
+    code {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.88em;
+      padding: 0.1em 0.35em;
+      background: var(--code-bg);
+      border-radius: 3px;
+    }
+
+    table {
+      width: 100%;
+      margin: 1rem 0;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 253, 248, 0.7); }
+
+    .callout {
+      margin: 1rem 0;
+      padding: 0.85rem 1rem;
+      background: var(--warn-bg);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .callout p { margin: 0; }
+
+    .mermaid {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+
+    .diagram-caption {
+      margin: -0.35rem 0 1.25rem;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.03em;
+    }
+
+    .phase {
+      margin: 1.25rem 0;
+      padding: 1rem 1.1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+
+    .phase h3 {
+      margin-top: 0;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">langchain-first-chain</p>
+      <h1>Learning roadmap</h1>
+      <p class="lede">What to change next, and which concepts to learn. Companion to <a href="study_notes.html">study_notes.html</a> (already learned). Work on <code>dev</code>; merge to <code>main</code> only when you choose.</p>
+    </header>
+
+    <nav class="toc" aria-label="Table of contents">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#goal">Goal</a></li>
+        <li><a href="#now">Where you are</a></li>
+        <li><a href="#path">Suggested path</a></li>
+        <li><a href="#phases">Phases</a></li>
+        <li><a href="#later">Deliberately later</a></li>
+        <li><a href="#howto">How to use this doc</a></li>
+        <li><a href="#done">Definition of done</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="goal">Goal</h2>
+    <p>Build on <strong>LCEL → memory/tools → LangGraph → Studio → Conventional Commits</strong>. One concept at a time. Add just enough engineering (tests, CI) to make the learning durable.</p>
+
+    <h2 id="now">Where you are</h2>
+    <ul>
+      <li>Local Ollama + <code>uv</code></li>
+      <li>Learning scripts + shared <code>graph_core</code> / Studio graph <code>tutor</code></li>
+      <li>Soft/hard compression, pinned facts, checkpoint / thread mental model</li>
+      <li>Light CI: Conventional Commits on PR and on push to <code>main</code>/<code>dev</code></li>
+    </ul>
+    <div class="callout">
+      <p>Detail for what you already know lives in <a href="study_notes.html">study_notes.html</a>. This page is the forward-looking plan.</p>
+    </div>
+
+    <h2 id="path">Suggested path</h2>
+    <div class="mermaid">
+flowchart LR
+  A[Conditional edges and tool loop] --> B[HITL interrupt]
+  B --> C[Streaming and observability]
+  C --> D[Tests and fuller CI]
+  D --> E[RAG or Deploy elsewhere]
+    </div>
+    <p class="diagram-caption">flowchart — recommended order</p>
+
+    <div class="mermaid">
+journey
+  title Next learning slices
+  section Graph skills
+    Conditional tool loop: 3: You
+    Compare create_agent: 2: You
+  section Control
+    HITL interrupt: 2: You
+    Streaming events: 2: You
+  section Engineering
+    Pytest smoke + CI test job: 3: You
+    LangSmith traces optional: 2: You
+  section Later repos
+    RAG or Agent Server: 1: You
+    </div>
+    <p class="diagram-caption">journey — rough confidence targets (1–5) when each slice is done</p>
+
+    <h2 id="phases">Phases</h2>
+
+    <div class="phase" id="phase-1">
+      <h3>1. Make the graph more agent-like</h3>
+      <p><strong>Engineering:</strong> After <code>generate</code>, if there are <code>tool_calls</code>, use a <strong>conditional edge</strong> back to the model (instead of only the hand-written one-round loop). Optionally compare with <code>create_agent</code>.</p>
+      <p><strong>Concepts:</strong> conditional edges, ReAct loop, reducers / <code>add_messages</code>, <code>create_agent</code>.</p>
+    </div>
+
+    <div class="phase" id="phase-2">
+      <h3>2. Human-in-the-loop (HITL)</h3>
+      <p><strong>Engineering:</strong> Pause before a sensitive step; resume from Studio (Interrupts). Practice continuing from a chosen checkpoint.</p>
+      <p><strong>Concepts:</strong> HITL, <code>interrupt</code> / resume, <code>checkpoint_id</code> time travel.</p>
+    </div>
+
+    <div class="phase" id="phase-3">
+      <h3>3. Streaming</h3>
+      <p><strong>Engineering:</strong> Stream tokens or node events through the LangGraph API / Studio; optionally stream in the CLI.</p>
+      <p><strong>Concepts:</strong> <code>stream</code> modes, token vs graph events (and why string-streaming hid <code>tool_calls</code> before).</p>
+    </div>
+
+    <div class="phase" id="phase-4">
+      <h3>4. Observability</h3>
+      <p><strong>Engineering:</strong> Optional <code>LANGSMITH_API_KEY</code> in <code>.env</code>; make reading traces a habit when debugging multi-step runs.</p>
+      <p><strong>Concepts:</strong> LangSmith tracing, run vs thread, what Studio shows without a key.</p>
+    </div>
+
+    <div class="phase" id="phase-5">
+      <h3>5. Deeper engineering</h3>
+      <p><strong>Engineering:</strong> Pytest smoke tests for graph helpers; CI job with <code>uv sync</code> + tests; optional Ruff.</p>
+      <p><strong>Concepts:</strong> test pyramid, CI beyond commitlint, dependency caching in Actions.</p>
+    </div>
+
+    <div class="phase" id="phase-6">
+      <h3>6. Config and quality</h3>
+      <p><strong>Engineering:</strong> Keep env-based model config; optionally replace regex facts with Pydantic; tighten types/lint.</p>
+      <p><strong>Concepts:</strong> configuration management, structured validation beyond LLM output.</p>
+    </div>
+
+    <div class="phase" id="phase-7">
+      <h3>7. Separate themes (new repo)</h3>
+      <p><strong>Engineering:</strong> RAG / vector stores, FastAPI or Agent Chat UI, <code>langgraph deploy</code>.</p>
+      <p><strong>Concepts:</strong> retrieval vs chat compression, Agent Server, production checkpointers (e.g. Postgres).</p>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Phase</th><th>Change in this repo</th><th>Learn</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>Conditional tool loop</td><td>ReAct, edges, <code>create_agent</code></td></tr>
+        <tr><td>2</td><td>HITL pause/resume</td><td>interrupt, checkpoint_id</td></tr>
+        <tr><td>3</td><td>Streaming</td><td>stream modes / events</td></tr>
+        <tr><td>4</td><td>Optional LangSmith</td><td>tracing</td></tr>
+        <tr><td>5</td><td>Tests + CI job</td><td>automated testing</td></tr>
+        <tr><td>6</td><td>Config / Pydantic facts</td><td>validation</td></tr>
+        <tr><td>7</td><td>New repository</td><td>RAG / deploy</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="later">Deliberately later</h2>
+    <ul>
+      <li>Full CD / Kubernetes “just because”</li>
+      <li>Forcing RAG into this starter (prefer another repo)</li>
+      <li>Piling unrelated CI checks for the sake of a green badge</li>
+    </ul>
+
+    <h2 id="howto">How to use this doc</h2>
+    <ol>
+      <li>Pick <strong>one</strong> phase; implement on <code>dev</code>.</li>
+      <li>When the concept sticks, move a short summary into <a href="study_notes.html">study_notes.html</a>.</li>
+      <li>Open a PR if you want CI on the branch; merge to <code>main</code> only manually when you are ready.</li>
+      <li>Keep Conventional Commits (<code>feat:</code>, <code>docs:</code>, <code>ci:</code>, …).</li>
+    </ol>
+
+    <div class="mermaid">
+flowchart LR
+  Pick[Pick one phase] --> Dev[Implement on dev]
+  Dev --> Notes[Update study_notes]
+  Notes --> PR[Optional PR + CI]
+  PR --> Main[Manual merge to main]
+    </div>
+    <p class="diagram-caption">flowchart — how to work a slice</p>
+
+    <h2 id="done">Definition of done (whole arc)</h2>
+    <ul>
+      <li>You can implement or clearly explain a conditional tool loop vs <code>create_agent</code>.</li>
+      <li>You can demo one HITL interrupt/resume.</li>
+      <li>CI runs at least one real test job (not only commit-message checks).</li>
+      <li>You know why RAG / production deploy belong in another project.</li>
+    </ul>
+
+    <footer>
+      <p>Stored in-repo under <code>docs/</code> (versioned with git; not a GitHub Wiki). Open in a browser so Mermaid diagrams render (needs network for the CDN).</p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -2,7 +2,8 @@
 
 Hands-on starter for **LangChain LCEL**: Prompt → LLM → output parser (or structured Pydantic fields), running fully local with **Ollama** (no API key).
 
-Learning notes (HTML, open in a browser): [`study_notes.html`](study_notes.html).
+Learning notes (HTML, open in a browser): [`docs/study_notes.html`](docs/study_notes.html).  
+Next topics / what to change next: [`docs/learning-roadmap.html`](docs/learning-roadmap.html).
 
 ## What you learn
 
