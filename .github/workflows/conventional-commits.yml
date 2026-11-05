@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - dev
+  push:
+    branches:
+      - main
+      - dev
 
 jobs:
   conventional-commits:
@@ -15,7 +19,50 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: webiny/action-conventional-commits@v1.4.2
+      # PR: use the dedicated action (full PR commit list).
+      - name: Check PR commits
+        if: github.event_name == 'pull_request'
+        uses: webiny/action-conventional-commits@v1.4.2
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           allowed-commit-types: 'feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert,merge'
+
+      # Merge / direct push into main|dev: check commits in the push range.
+      - name: Check push commits
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TYPES='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|merge'
+          PATTERN="^(${TYPES})(\\(.+\\))?(!)?: .+"
+
+          if [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] || [ -z "${BEFORE}" ]; then
+            MSGS=$(git log -1 --pretty=%s "${SHA}")
+          else
+            MSGS=$(git log --pretty=%s "${BEFORE}..${SHA}")
+          fi
+
+          if [ -z "${MSGS}" ]; then
+            echo 'No commits to check.'
+            exit 0
+          fi
+
+          fail=0
+          while IFS= read -r msg; do
+            [ -z "${msg}" ] && continue
+            # Allow default GitHub / git merge commit subjects created by the Merge button.
+            if echo "${msg}" | grep -Eq '^Merge (pull request|branch|remote-tracking)'; then
+              echo "OK (merge commit): ${msg}"
+              continue
+            fi
+            if echo "${msg}" | grep -Eq "${PATTERN}"; then
+              echo "OK: ${msg}"
+            else
+              echo "BAD: ${msg}"
+              fail=1
+            fi
+          done <<< "${MSGS}"
+
+          exit "${fail}"

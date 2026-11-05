@@ -160,7 +160,12 @@ After that, non-conforming `git commit` messages are rejected. New clones need t
 
 ### CI
 
-Pull requests targeting `main` or `dev` run [`.github/workflows/conventional-commits.yml`](.github/workflows/conventional-commits.yml) and check the same types.
+[`.github/workflows/conventional-commits.yml`](.github/workflows/conventional-commits.yml) runs on:
+
+- **Pull requests** targeting `main` or `dev`
+- **Pushes** to `main` or `dev` (including after a PR is merged)
+
+Allowed types match the local hook. Default GitHub “Merge pull request …” merge-commit subjects are allowed on push so a normal UI merge does not fail CI.
 
 ## Optional tweaks
 
