@@ -5,6 +5,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 
+from settings import OLLAMA_MODEL, OLLAMA_TEMPERATURE
+
 # 1) Prompt template — system sets the tutor role; {topic} is filled in at invoke time
 prompt = ChatPromptTemplate.from_messages(
     [
@@ -22,7 +24,7 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 # 2) Local chat model via Ollama (must be running; model must be pulled)
-model = ChatOllama(model='llama3.2', temperature=0)
+model = ChatOllama(model=OLLAMA_MODEL, temperature=OLLAMA_TEMPERATURE)
 
 # 3) Turn the model message into a plain string
 parser = StrOutputParser()

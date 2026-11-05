@@ -13,6 +13,8 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 
+from settings import OLLAMA_MODEL, OLLAMA_TEMPERATURE
+
 SYSTEM_PROMPT = (
     'You are a patient tutor in a continuing terminal chat (same session). '
     'You DO have short-term memory: the messages in this request, plus any '
@@ -67,7 +69,7 @@ FACT_LABELS = {
 }
 
 # 2) Local chat model via Ollama (must be running; model must be pulled)
-model = ChatOllama(model='llama3.2', temperature=0)
+model = ChatOllama(model=OLLAMA_MODEL, temperature=OLLAMA_TEMPERATURE)
 
 
 @tool

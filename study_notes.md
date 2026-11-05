@@ -2,12 +2,13 @@
 
 Notes for what this repo actually uses so far. Not a full LangChain textbook.
 
-Four scripts:
+Four scripts (+ shared graph modules):
 
 - `first_chain.py` — one prompt, one answer, no memory between questions.
 - `extract_paragraph.py` — one paste, Pydantic fields (`summary`, `paragraph_count`, `author`, `published_at`).
 - `chatbot.py` — multi-turn messages + `trim_messages` + JSON sessions.
-- `graph_chatbot.py` — same turn logic as a LangGraph; sqlite checkpointer.
+- `graph_chatbot.py` — CLI entry for the LangGraph twin; sqlite checkpointer.
+- `graph_core.py` / `graph_server.py` — shared graph + `langgraph dev` export (`tutor`).
 
 ## Big picture
 
@@ -52,9 +53,9 @@ They are not the same program.
 | Piece | What it is |
 |-------|------------|
 | **Ollama** | Native app / background service. Speaks HTTP (default `localhost:11434`). Holds models like `llama3.2`. Install globally; `ollama serve`, `ollama pull`. |
-| **`langchain-ollama.ChatOllama`** | Python client inside the venv. Builds chat requests and talks to that service. |
+| **`langchain-ollama.ChatOllama`** | Python client inside the `.venv` (created by `uv sync`). Builds chat requests and talks to that service. |
 
-If Ollama is down, the Python chain fails even if `pip install` succeeded.
+If Ollama is down, the Python chain fails even if `uv sync` succeeded.
 
 `temperature=0` means more deterministic answers. It does **not** mean "always factually correct".
 
@@ -94,12 +95,12 @@ Takeaways:
 
 For this project:
 
-- **In the venv**: Python + `langchain` / `langchain-core` / `langchain-ollama` (PyPI).
-- **Global**: Ollama app + pulled models; Git; editor.
+- **In `.venv`**: Python + deps from `pyproject.toml` / `uv.lock` (`uv sync`).
+- **Global**: [uv](https://docs.astral.sh/uv/), Ollama app + pulled models; Git; editor.
 
-`pip` + `venv` is enough because everything we import is on PyPI.
+**uv** is enough because everything we import is on PyPI. Prefer `uv run python chatbot.py` so you need not activate the venv.
 
-Windows **Git Bash** uses forward slashes:
+Windows **Git Bash** uses forward slashes if you do activate:
 
 ```bash
 source .venv/Scripts/activate
@@ -255,17 +256,32 @@ invoke
 
 JSON stores `tool_calls` on `role: ai` and `role: tool` with `tool_call_id`. Reloading must keep the pair together.
 
-## LangGraph twin (`graph_chatbot.py`)
+## LangGraph twin (`graph_core` + CLI / Server)
 
-`chatbot.py` still owns the functions. `graph_chatbot.py` imports them and runs one turn as two nodes:
+`chatbot.py` still owns the turn helpers. `graph_core.py` wires one turn as three nodes; `graph_chatbot.py` is the CLI; `graph_server.py` exports `graph` for `langgraph.json`.
 
 ```text
-START -> prepare (make_system + soft compress) -> generate (hard trim + run_turn) -> END
+START -> ingest (harvest_facts from last HumanMessage)
+      -> prepare (make_system + soft compress)
+      -> generate (hard trim + run_turn)
+      -> END
 ```
 
-State is `messages`, `facts`, `topic_notes`, `n_summarized`. Nodes **replace** the list (no `add_messages`), because this app rewrites `messages[0]` and sometimes replaces the whole tail. A session id is `thread_id`. Checkpointer is SQLite at `sessions/langgraph.sqlite`, not the JSON files.
+State is `messages` (`add_messages`), `facts`, `topic_notes`, `n_summarized`. Studio/CLI invoke with **only the new** `HumanMessage`; history stays in the checkpointer. Soft compress / system rebuild uses `RemoveMessage(REMOVE_ALL_MESSAGES)` then the new list. A session id is `thread_id`.
 
-Not `create_agent`. Agent Chat UI / Studio would still need an Agent Server; this file is only a CLI graph.
+| Entry | Checkpoint |
+|-------|------------|
+| `uv run python graph_chatbot.py` | `sessions/langgraph.sqlite` (SqliteSaver) |
+| `uv run langgraph dev` (Studio) | Platform / inmem persistence (no custom checkpointer on the exported graph) |
+
+```text
+CLI:   you type  -> append HumanMessage  -> graph.invoke (full state)
+Studio: HTTP API -> same graph (ingest harvests facts) -> Ollama
+```
+
+Model name: `settings.OLLAMA_MODEL` from env / `.env` (not hard-coded `llama3.2`).
+
+Not `create_agent`. Agent Chat UI / FastAPI product UIs stay out of this repo; local Studio is available via `langgraph dev`.
 
 ## Compression: soft summary, then hard `trim_messages`
 
@@ -314,4 +330,4 @@ Hard trim alone used to print `sending 8 of 32` and forget the name. Soft-then-h
 
 ## Not in the code yet (next concepts)
 
-See README “Later concepts”: RAG / Studio / a web UI stay out of this repo for now. Chatbot facts still use regex. `chatbot.py` uses JSON; `graph_chatbot.py` uses a sqlite checkpointer. Neither is `create_agent`.
+See README “Later concepts”: RAG / Agent Chat UI / FastAPI stay out of this repo for now. Local `langgraph dev` + Studio are in. Chatbot facts still use regex. `chatbot.py` uses JSON; CLI and Studio each use their own sqlite checkpointer. Neither is `create_agent`.
