@@ -45,6 +45,11 @@ Next topics / what to change next: [`docs/learning-roadmap.html`](docs/learning-
 - SQLite checkpointer (`sessions/langgraph.sqlite`); `thread_id` is the session id — required for interrupts
 - Does **not** use `create_agent`; does **not** share `sessions/*.json` with `chatbot.py`
 
+**`compare_create_agent.py` (optional contrast):**
+
+- Same Ollama model + `get_time`, but via LangChain `create_agent` (production default) vs our tutorial `graph_core`
+- Prints node lists and a short message tail so you can see ReAct-for-free vs custom memory/HITL nodes
+
 **Dev server (`langgraph dev` + Studio):**
 
 - [`langgraph.json`](langgraph.json) points at `graph_server.py:graph` (graph id **`tutor`**)
@@ -102,6 +107,12 @@ Same chatbot as a LangGraph (`thread_id` = session id; sqlite, not JSON):
 
 ```bash
 uv run python graph_chatbot.py
+```
+
+Side-by-side `create_agent` vs `graph_core` (same model + `get_time`):
+
+```bash
+uv run python compare_create_agent.py
 ```
 
 Paste a paragraph and print structured fields (`summary`, `paragraph_count`, `author`, `published_at`):

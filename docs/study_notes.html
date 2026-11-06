@@ -406,7 +406,7 @@ flowchart LR
       <li><strong>ReAct</strong> — <code>llm</code> ↔ <code>tools</code> loop.</li>
       <li><strong>Router</strong> — classify then branch.</li>
       <li><strong>HITL</strong> — <strong>Human-In-The-Loop</strong>: pause for approval (<code>interrupt</code>).</li>
-      <li><strong><code>create_agent</code></strong> — higher-level ReAct wrapper (still unused here).</li>
+      <li><strong><code>create_agent</code></strong> — higher-level ReAct wrapper; compared in <code>compare_create_agent.py</code> (tutor graph stays custom).</li>
     </ul>
     <div class="mermaid">
 flowchart TB
@@ -427,6 +427,43 @@ flowchart TB
   end
     </div>
     <p class="diagram-caption">flowchart — common patterns side by side</p>
+
+    <h3><code>create_agent</code> vs <code>graph_core</code></h3>
+    <div class="callout">
+      <p><strong>Default for real products:</strong> <code>create_agent</code> (model + tools ReAct, optional middleware / checkpointer). <strong>This repo’s <code>graph_core</code></strong> is the tutorial path — hand-wire the same loop so memory, HITL, and Studio checkpoints stay visible. Prefer a custom <code>StateGraph</code> later only when the flow is not a standard tool agent (multi-step pipelines, routers, RAG graphs, etc.).</p>
+    </div>
+    <div class="mermaid">
+flowchart TD
+  Need[Need an agent?] --> Simple{Standard model + tools?}
+  Simple -->|yes most apps| CA[create_agent]
+  Simple -->|no custom workflow| SG[hand-written StateGraph]
+  CA --> Learn[This tutorial still builds graph_core to see the parts]
+    </div>
+    <p class="diagram-caption">flowchart — when to use which</p>
+    <p>Run <code>uv run python compare_create_agent.py</code>. Both use the same Ollama model and <code>get_time</code>; the compiled graphs differ:</p>
+    <div class="mermaid">
+flowchart LR
+  subgraph ca [create_agent]
+    M[model] <--> T[tools]
+  end
+  subgraph gc [graph_core tutorial]
+    I[ingest] --> P[prepare] --> G[generate]
+    G <--> TL[tools + HITL]
+  end
+    </div>
+    <p class="diagram-caption">flowchart — factory agent vs tutor graph</p>
+    <table>
+      <thead>
+        <tr><th></th><th><code>create_agent</code></th><th><code>graph_core</code> (this tutorial)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Role</td><td>Production default for tool agents</td><td>Learning scaffold (not the everyday default)</td></tr>
+        <tr><td>Nodes</td><td><code>model</code>, <code>tools</code></td><td><code>ingest</code>, <code>prepare</code>, <code>generate</code>, <code>tools</code></td></tr>
+        <tr><td>ReAct loop</td><td>Built-in</td><td>Hand-wired <code>tools_condition</code> + <code>ToolNode</code></td></tr>
+        <tr><td>Memory / facts</td><td>Messages (+ middleware if you add it)</td><td>Harvest + soft summary + hard trim</td></tr>
+        <tr><td>HITL</td><td>Middleware (e.g. interrupt on tools)</td><td><code>interrupt()</code> inside <code>tools</code></td></tr>
+      </tbody>
+    </table>
 
     <h3>HITL interrupt + resume</h3>
     <p>Before running tools, the graph pauses with a JSON payload (<code>action</code>, <code>tool_calls</code>). Resume value becomes the return of <code>interrupt()</code>.</p>
@@ -743,7 +780,7 @@ sequenceDiagram
   G-&gt;&gt;CP: write updated state
     </div>
 
-    <p>Model name: <code>settings.OLLAMA_MODEL</code>. Not <code>create_agent</code>. Agent Chat UI / FastAPI product fronts stay out of this repo.</p>
+    <p>Model name: <code>settings.OLLAMA_MODEL</code>. The tutor graph is intentional teaching code — production tool agents usually start from <code>create_agent</code> (see comparison above). Agent Chat UI / FastAPI product fronts stay out of this repo.</p>
 
     <h2 id="compression">Compression: soft summary, then hard <code>trim_messages</code></h2>
     <div class="mermaid">
@@ -773,16 +810,16 @@ flowchart TD
 )</code></pre>
 
     <h2 id="next">Not in the code yet</h2>
-    <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio are in.</p>
+    <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio, tool loop, HITL, and <code>create_agent</code> contrast are in.</p>
     <div class="mermaid">
 flowchart LR
-  Now[Now: pipeline + Studio] --> N1[conditional edges / tool loop]
-  N1 --> N2[HITL or create_agent]
-  N2 --> N3[streaming / LangSmith]
+  Now[Now: graph + HITL + create_agent compare] --> N1[streaming]
+  N1 --> N2[LangSmith]
+  N2 --> N3[pytest + CI]
   N3 --> Later[RAG / Deploy]
     </div>
     <p class="diagram-caption">flowchart — suggested next topics</p>
-    <p>Next learning candidates: streaming events, <code>create_agent</code> comparison, optional LangSmith tracing, pytest smoke + CI.</p>
+    <p>Next learning candidates: streaming events, optional LangSmith tracing, pytest smoke + CI.</p>
 
     <footer>
       <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN). Forward-looking plan: <a href="learning-roadmap.html">learning-roadmap.html</a>.</p>
