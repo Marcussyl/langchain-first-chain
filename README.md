@@ -39,8 +39,10 @@ Next topics / what to change next: [`docs/learning-roadmap.html`](docs/learning-
 
 - Same harvest / soft summary / hard trim / `get_time` as `chatbot.py` (via `graph_core.py`)
 - `StateGraph` nodes `ingest` → `prepare` → `generate` ↔ `tools` (`tools_condition` + `ToolNode`) instead of a `while True` body
-- Tool rounds live in the graph; `chatbot.py` still uses the hand-written `run_turn` one-round loop
-- SQLite checkpointer (`sessions/langgraph.sqlite`); `thread_id` is the session id
+- **HITL**: `interrupt()` inside `tools` before running tools; CLI prompts `y/N`, Studio uses Interrupts; resume with `Command(resume=…)`
+- Type `history` in the LangGraph CLI to list recent `checkpoint_id` values (time-travel practice)
+- Tool rounds live in the graph; `chatbot.py` still uses the hand-written `run_turn` one-round loop (no HITL)
+- SQLite checkpointer (`sessions/langgraph.sqlite`); `thread_id` is the session id — required for interrupts
 - Does **not** use `create_agent`; does **not** share `sessions/*.json` with `chatbot.py`
 
 **Dev server (`langgraph dev` + Studio):**

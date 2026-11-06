@@ -260,6 +260,7 @@
       <li>Learning scripts + shared <code>graph_core</code> / Studio graph <code>tutor</code></li>
       <li>Soft/hard compression, pinned facts, checkpoint / thread mental model</li>
       <li>Phase 1 graph: <code>generate</code> ↔ <code>tools</code> via <code>tools_condition</code> + <code>ToolNode</code></li>
+      <li>Phase 2 HITL: <code>interrupt()</code> before tools; CLI / Studio resume; <code>history</code> lists <code>checkpoint_id</code></li>
       <li>Light CI: Conventional Commits on PR and on push to <code>main</code>/<code>dev</code></li>
     </ul>
     <div class="callout">
@@ -283,7 +284,7 @@ journey
     Conditional tool loop: 5: You
     Compare create_agent: 2: You
   section Control
-    HITL interrupt: 2: You
+    HITL interrupt: 5: You
     Streaming events: 2: You
   section Engineering
     Pytest smoke + CI test job: 3: You
@@ -302,8 +303,8 @@ journey
     </div>
 
     <div class="phase" id="phase-2">
-      <h3>2. Human-in-the-loop (HITL)</h3>
-      <p><strong>Engineering:</strong> Pause before a sensitive step; resume from Studio (Interrupts). Practice continuing from a chosen checkpoint.</p>
+      <h3>2. Human-in-the-loop (HITL) <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.04em;">(done on graph)</span></h3>
+      <p><strong>Engineering:</strong> <code>tools</code> node calls <code>interrupt()</code> before <code>ToolNode</code>; CLI asks <code>y/N</code> and resumes with <code>Command(resume=…)</code>; Studio Interrupts panel. Type <code>history</code> in <code>graph_chatbot.py</code> to inspect <code>checkpoint_id</code>.</p>
       <p><strong>Concepts:</strong> HITL, <code>interrupt</code> / resume, <code>checkpoint_id</code> time travel.</p>
     </div>
 
@@ -343,7 +344,7 @@ journey
       </thead>
       <tbody>
         <tr><td>1</td><td>Conditional tool loop ✓ (<code>tools_condition</code> + <code>ToolNode</code>)</td><td>ReAct, edges, <code>create_agent</code></td></tr>
-        <tr><td>2</td><td>HITL pause/resume</td><td>interrupt, checkpoint_id</td></tr>
+        <tr><td>2</td><td>HITL pause/resume ✓ (<code>interrupt</code> before tools)</td><td>interrupt, checkpoint_id</td></tr>
         <tr><td>3</td><td>Streaming</td><td>stream modes / events</td></tr>
         <tr><td>4</td><td>Optional LangSmith</td><td>tracing</td></tr>
         <tr><td>5</td><td>Tests + CI job</td><td>automated testing</td></tr>

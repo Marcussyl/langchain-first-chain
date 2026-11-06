@@ -4,9 +4,10 @@
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.types import interrupt
 
 from chatbot import (
   MAX_CONTEXT_TOKENS,
@@ -149,8 +150,67 @@ def generate_node(state: ChatState) -> dict:
   return {'messages': [ai]}
 
 
+def _latest_tool_calls(messages: list) -> list[dict]:
+  """Summarize tool_calls on the newest AIMessage (JSON-safe for interrupt())."""
+  for msg in reversed(messages):
+    if not isinstance(msg, AIMessage):
+      continue
+    calls = getattr(msg, 'tool_calls', None) or []
+    if not calls:
+      continue
+    return [
+      {
+        'name': call.get('name'),
+        'args': call.get('args') or {},
+        'id': call.get('id'),
+      }
+      for call in calls
+    ]
+  return []
+
+
+def _parse_tool_approval(decision: Any) -> bool:
+  """Accept bool, yes/no strings, or {approved: bool} / {type: approve|reject}."""
+  if isinstance(decision, bool):
+    return decision
+  if isinstance(decision, dict):
+    if 'approved' in decision:
+      return bool(decision['approved'])
+    decision_type = str(decision.get('type') or '').strip().lower()
+    if decision_type in {'approve', 'approved', 'yes', 'y'}:
+      return True
+    if decision_type in {'reject', 'rejected', 'no', 'n'}:
+      return False
+  if isinstance(decision, str):
+    return decision.strip().lower() in {'y', 'yes', 'true', 'approve', 'approved', '1'}
+  return False
+
+
 def tools_node(state: ChatState) -> dict:
-  """Run tool calls from the latest AIMessage; print each result for the CLI."""
+  """HITL: interrupt() for approval, then ToolNode (or rejected ToolMessages).
+
+  On resume the node restarts from the top — keep interrupt() before side effects.
+  Requires a checkpointer (CLI SqliteSaver or Studio platform persistence).
+  """
+  pending = _latest_tool_calls(list(state['messages']))
+  decision = interrupt({
+    'action': 'approve_tool_calls',
+    'tool_calls': pending,
+    'hint': 'Resume with true/false, yes/no, or {approved: bool}',
+  })
+  if not _parse_tool_approval(decision):
+    print('(HITL: tools rejected by human)')
+    rejected = [
+      ToolMessage(
+        content='Tool call rejected by human.',
+        tool_call_id=call['id'],
+        name=call.get('name') or 'tool',
+      )
+      for call in pending
+      if call.get('id')
+    ]
+    return {'messages': rejected}
+
   result = _tool_node.invoke({'messages': list(state['messages'])})
   new_messages = list(result.get('messages') or [])
   for msg in new_messages:
@@ -160,10 +220,12 @@ def tools_node(state: ChatState) -> dict:
 
 
 def build_graph(checkpointer: Any | None = None):
-  """ingest -> prepare -> generate <-> tools (conditional ReAct loop).
+  """ingest -> prepare -> generate <-> tools (HITL interrupt before tools).
 
   Pass a checkpointer for the CLI. For langgraph.dev / Studio, omit it —
   the API injects its own persistence and rejects a custom SqliteSaver.
+  Interrupts need that persistence (CLI or Studio) — they will not work
+  on a graph compiled with checkpointer=None outside the platform.
   """
   builder = StateGraph(ChatState)
   builder.add_node('ingest', ingest_node)
@@ -179,6 +241,27 @@ def build_graph(checkpointer: Any | None = None):
   if checkpointer is None:
     return builder.compile()
   return builder.compile(checkpointer=checkpointer)
+
+
+def pending_interrupts(result: Any) -> list:
+  """Normalize __interrupt__ from invoke() (list of Interrupt or empty)."""
+  if not isinstance(result, dict):
+    return []
+  items = result.get('__interrupt__') or []
+  return list(items)
+
+
+def print_checkpoint_history(graph, config: dict, limit: int = 8) -> None:
+  """Show recent checkpoints for this thread (time-travel practice)."""
+  print(f'(checkpoints for thread_id={config.get("configurable", {}).get("thread_id")})')
+  for index, snap in enumerate(graph.get_state_history(config)):
+    if index >= limit:
+      print(f'  … truncated after {limit}')
+      break
+    cfg = (snap.config or {}).get('configurable') or {}
+    checkpoint_id = cfg.get('checkpoint_id')
+    next_nodes = list(snap.next or ())
+    print(f'  [{index}] checkpoint_id={checkpoint_id}  next={next_nodes or ["(done)"]}')
 
 
 def history_len(messages: list) -> int:

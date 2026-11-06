@@ -395,10 +395,10 @@ flowchart LR
         <tr><td><code>ingest</code></td><td>Harvest personal <code>facts</code> from the latest human text (regex)</td></tr>
         <tr><td><code>prepare</code></td><td>Rebuild <code>SystemMessage</code> + soft compression</td></tr>
         <tr><td><code>generate</code></td><td>Hard trim + model invoke (append one <code>AIMessage</code>)</td></tr>
-        <tr><td><code>tools</code></td><td><code>ToolNode([get_time])</code>; prints <code>(tool: …)</code> for CLI</td></tr>
+        <tr><td><code>tools</code></td><td>HITL <code>interrupt()</code> then <code>ToolNode([get_time])</code> (or rejected <code>ToolMessage</code>)</td></tr>
       </tbody>
     </table>
-    <p>After <code>generate</code>, <code>tools_condition</code> routes to <code>tools</code> or <code>END</code>. <code>ingest</code>/<code>prepare</code> could be merged; split for Studio clarity. <code>n_summarized</code> = how many older messages soft-compression folded this turn (mostly for debug logs).</p>
+    <p>After <code>generate</code>, <code>tools_condition</code> routes to <code>tools</code> or <code>END</code>. Inside <code>tools</code>, <code>interrupt()</code> pauses until the human resumes (<code>Command(resume=…)</code>). Needs a checkpointer. <code>ingest</code>/<code>prepare</code> could be merged; split for Studio clarity.</p>
 
     <h3>Common graph patterns (habits, not required APIs)</h3>
     <ul>
@@ -420,12 +420,42 @@ flowchart TB
     T1 -->|more tool_calls| A1
     T1 -->|done| E1[end]
   end
-  subgraph hitl [HITL]
-    H1[draft] --> H2[interrupt human]
-    H2 --> H3[execute]
+  subgraph hitl [HITL this repo]
+    H1[tools node] --> H2[interrupt approve?]
+    H2 -->|yes| H3[ToolNode]
+    H2 -->|no| H4[rejected ToolMessage]
   end
     </div>
     <p class="diagram-caption">flowchart — common patterns side by side</p>
+
+    <h3>HITL interrupt + resume</h3>
+    <p>Before running tools, the graph pauses with a JSON payload (<code>action</code>, <code>tool_calls</code>). Resume value becomes the return of <code>interrupt()</code>.</p>
+    <div class="mermaid">
+sequenceDiagram
+  participant U as Human
+  participant G as Graph
+  participant T as ToolNode
+
+  G-&gt;&gt;G: generate AIMessage with tool_calls
+  G-&gt;&gt;U: interrupt approve_tool_calls
+  alt approve
+    U-&gt;&gt;G: Command resume true
+    G-&gt;&gt;T: run get_time
+    T--&gt;&gt;G: ToolMessage
+    G-&gt;&gt;G: generate final reply
+  else reject
+    U-&gt;&gt;G: Command resume false
+    G-&gt;&gt;G: ToolMessage rejected
+    G-&gt;&gt;G: generate again
+  end
+    </div>
+    <p class="diagram-caption">sequenceDiagram — tool approval HITL</p>
+    <ul>
+      <li>CLI: <code>graph_chatbot.py</code> prompts <code>y/N</code>; type <code>history</code> to list <code>checkpoint_id</code>.</li>
+      <li>Studio: Interrupts panel → resume with boolean / JSON.</li>
+      <li>Time travel: pass <code>checkpoint_id</code> in <code>configurable</code> to continue from an older snapshot (same <code>thread_id</code>).</li>
+      <li>On resume the node restarts from the top — keep side effects <strong>after</strong> <code>interrupt()</code>.</li>
+    </ul>
 
     <h3>Checkpointing</h3>
     <ul>
@@ -670,7 +700,9 @@ flowchart TD
   -> print the final text
 
 graph_core:
-  generate --tools_condition--> tools --edge--> generate
+  generate --tools_condition--> tools
+  tools: interrupt() then ToolNode (or reject)
+  tools --> generate
   generate --no tool_calls--> END</code></pre>
     <p><code>ToolMessage.tool_call_id</code> must match the requesting AI tool call. Hard trim uses <code>start_on='human'</code> so a cut never starts on a dangling tool message.</p>
 
@@ -706,7 +738,7 @@ sequenceDiagram
   Note over G: add_messages appends human
   G-&gt;&gt;G: ingest then prepare then generate
   opt tool_calls
-    G-&gt;&gt;G: tools then generate again
+    G-&gt;&gt;G: interrupt HITL then tools then generate again
   end
   G-&gt;&gt;CP: write updated state
     </div>
@@ -750,7 +782,7 @@ flowchart LR
   N3 --> Later[RAG / Deploy]
     </div>
     <p class="diagram-caption">flowchart — suggested next topics</p>
-    <p>Next learning candidates: conditional edges / tool loops, HITL interrupts, streaming events, <code>create_agent</code>, optional LangSmith tracing.</p>
+    <p>Next learning candidates: streaming events, <code>create_agent</code> comparison, optional LangSmith tracing, pytest smoke + CI.</p>
 
     <footer>
       <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN). Forward-looking plan: <a href="learning-roadmap.html">learning-roadmap.html</a>.</p>
