@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
-"""Shared LangGraph tutor: ingest -> prepare -> generate (CLI and langgraph dev)."""
+"""Shared LangGraph tutor: ingest -> prepare -> generate <-> tools (CLI and langgraph.dev)."""
 
 from typing import Annotated, Any, TypedDict
 
-from langchain_core.messages import HumanMessage, RemoveMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from chatbot import (
   MAX_CONTEXT_TOKENS,
   apply_soft_compression,
   count_tokens,
   format_facts,
+  get_time,
   hard_trim,
   harvest_facts,
   make_system,
-  run_turn,
+  print_bot,
+  reply_chain,
 )
+
+# ReAct-style tool execution for the graph (chatbot.py CLI still uses run_turn).
+_tool_node = ToolNode([get_time], handle_tool_errors=True)
 
 
 class ChatState(TypedDict):
@@ -111,31 +117,50 @@ def prepare_node(state: ChatState) -> dict:
 
 
 def generate_node(state: ChatState) -> dict:
-  """Hard-trim a copy, run one model/tool round, append only the new messages."""
+  """Hard-trim a copy, call the tool-bound model, append the AIMessage only.
+
+  Tool rounds are handled by the tools node + conditional edges (not run_turn).
+  """
   messages = list(state['messages'])
   to_send = hard_trim(messages)
-  n_summarized = state.get('n_summarized') or 0
-  extra = f'soft-summarized {n_summarized} older messages; ' if n_summarized else ''
-  tokens_before = count_tokens(messages)
-  tokens_after = count_tokens(to_send)
-  print(
-    f'(memory: {extra}sending {len(to_send)} of {len(messages)} messages, '
-    f'~{tokens_after}/{MAX_CONTEXT_TOKENS} tokens'
-    f'{f", was ~{tokens_before}" if tokens_after != tokens_before else ""})'
-  )
-  print(f'(known facts: {format_facts(state.get("facts") or {})})')
-  notes = state.get('topic_notes')
-  if notes:
-    print(f'(topic notes: {notes})')
+  # Log memory once per user turn (first generate after a human / after prepare).
+  if messages and _message_type(messages[-1]) in {'human', 'user'}:
+    n_summarized = state.get('n_summarized') or 0
+    extra = f'soft-summarized {n_summarized} older messages; ' if n_summarized else ''
+    tokens_before = count_tokens(messages)
+    tokens_after = count_tokens(to_send)
+    print(
+      f'(memory: {extra}sending {len(to_send)} of {len(messages)} messages, '
+      f'~{tokens_after}/{MAX_CONTEXT_TOKENS} tokens'
+      f'{f", was ~{tokens_before}" if tokens_after != tokens_before else ""})'
+    )
+    print(f'(known facts: {format_facts(state.get("facts") or {})})')
+    notes = state.get('topic_notes')
+    if notes:
+      print(f'(topic notes: {notes})')
 
-  new_messages = run_turn(to_send)
-  print()
-  # add_messages: append model/tool turns only (do not resend full history).
-  return {'messages': list(new_messages)}
+  ai = reply_chain.invoke({'messages': to_send})
+  if not isinstance(ai, AIMessage):
+    ai = AIMessage(content=str(ai))
+  tool_calls = getattr(ai, 'tool_calls', None) or []
+  if not tool_calls:
+    print_bot(ai)
+    print()
+  return {'messages': [ai]}
+
+
+def tools_node(state: ChatState) -> dict:
+  """Run tool calls from the latest AIMessage; print each result for the CLI."""
+  result = _tool_node.invoke({'messages': list(state['messages'])})
+  new_messages = list(result.get('messages') or [])
+  for msg in new_messages:
+    if isinstance(msg, ToolMessage):
+      print(f'(tool: {msg.name} -> {msg.content})')
+  return {'messages': new_messages}
 
 
 def build_graph(checkpointer: Any | None = None):
-  """Three nodes: ingest (facts) then prepare (memory) then generate (model + tool).
+  """ingest -> prepare -> generate <-> tools (conditional ReAct loop).
 
   Pass a checkpointer for the CLI. For langgraph.dev / Studio, omit it —
   the API injects its own persistence and rejects a custom SqliteSaver.
@@ -144,10 +169,13 @@ def build_graph(checkpointer: Any | None = None):
   builder.add_node('ingest', ingest_node)
   builder.add_node('prepare', prepare_node)
   builder.add_node('generate', generate_node)
+  builder.add_node('tools', tools_node)
   builder.add_edge(START, 'ingest')
   builder.add_edge('ingest', 'prepare')
   builder.add_edge('prepare', 'generate')
-  builder.add_edge('generate', END)
+  builder.add_conditional_edges('generate', tools_condition)
+  builder.add_edge('tools', 'generate')
+  # recursion_limit covers generate<->tools loops (default 25 is usually enough)
   if checkpointer is None:
     return builder.compile()
   return builder.compile(checkpointer=checkpointer)

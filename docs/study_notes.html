@@ -382,9 +382,11 @@ flowchart LR
   START --> ingest
   ingest --> prepare
   prepare --> generate
-  generate --> END
+  generate -->|tool_calls| tools
+  tools --> generate
+  generate -->|done| END
     </div>
-    <p class="diagram-caption">flowchart — tutor pipeline nodes</p>
+    <p class="diagram-caption">flowchart — tutor pipeline + ReAct tool loop</p>
     <table>
       <thead>
         <tr><th>Node</th><th>Role</th></tr>
@@ -392,10 +394,11 @@ flowchart LR
       <tbody>
         <tr><td><code>ingest</code></td><td>Harvest personal <code>facts</code> from the latest human text (regex)</td></tr>
         <tr><td><code>prepare</code></td><td>Rebuild <code>SystemMessage</code> + soft compression</td></tr>
-        <tr><td><code>generate</code></td><td>Hard trim + model / one tool round</td></tr>
+        <tr><td><code>generate</code></td><td>Hard trim + model invoke (append one <code>AIMessage</code>)</td></tr>
+        <tr><td><code>tools</code></td><td><code>ToolNode([get_time])</code>; prints <code>(tool: …)</code> for CLI</td></tr>
       </tbody>
     </table>
-    <p><code>ingest</code> and <code>prepare</code> could be merged; split for Studio clarity. <code>n_summarized</code> = how many older messages soft-compression folded this turn (mostly for debug logs).</p>
+    <p>After <code>generate</code>, <code>tools_condition</code> routes to <code>tools</code> or <code>END</code>. <code>ingest</code>/<code>prepare</code> could be merged; split for Studio clarity. <code>n_summarized</code> = how many older messages soft-compression folded this turn (mostly for debug logs).</p>
 
     <h3>Common graph patterns (habits, not required APIs)</h3>
     <ul>
@@ -407,8 +410,10 @@ flowchart LR
     </ul>
     <div class="mermaid">
 flowchart TB
-  subgraph pipeline [Pipeline this repo]
+  subgraph pipeline [Pipeline + ReAct in graph_core]
     P1[ingest] --> P2[prepare] --> P3[generate]
+    P3 -->|tool_calls| P4[tools]
+    P4 --> P3
   end
   subgraph react [ReAct pattern]
     A1[llm] --> T1[tools]
@@ -644,7 +649,11 @@ sequenceDiagram
     <p><code>MessagesPlaceholder('messages')</code> injects the list. Reply chain: <code>prompt | tool_model</code> (no string parser). Long-term file memory: <code>sessions/&lt;id&gt;.json</code>. That is ordinary JSON, not a LangGraph checkpointer.</p>
 
     <h2 id="tool">One tool (<code>get_time</code>)</h2>
-    <p>Not <code>create_agent</code>. At most one tool round:</p>
+    <p>Not <code>create_agent</code>. Two implementations:</p>
+    <ul>
+      <li><code>chatbot.py</code> — hand-written <code>run_turn</code> (at most one tool round in a Python loop).</li>
+      <li><code>graph_core.py</code> — <code>generate</code> ↔ <code>tools</code> via <code>tools_condition</code> + <code>ToolNode</code> (graph can loop until the model stops calling tools; recursion limit is the safety valve).</li>
+    </ul>
     <div class="mermaid">
 flowchart TD
   Inv1[invoke model] --> Check{tool_calls?}
@@ -654,18 +663,26 @@ flowchart TD
   Inv2 --> Print[print final text]
   Check -->|no| Print
     </div>
-    <p class="diagram-caption">flowchart — one-round tool loop</p>
-    <pre><code>invoke
+    <p class="diagram-caption">flowchart — chatbot.py one-round tool loop</p>
+    <pre><code>chatbot.py run_turn:
+  invoke
   -> if AIMessage.tool_calls: run get_time, append ToolMessage, invoke again
-  -> print the final text</code></pre>
+  -> print the final text
+
+graph_core:
+  generate --tools_condition--> tools --edge--> generate
+  generate --no tool_calls--> END</code></pre>
     <p><code>ToolMessage.tool_call_id</code> must match the requesting AI tool call. Hard trim uses <code>start_on='human'</code> so a cut never starts on a dangling tool message.</p>
 
     <h2 id="langgraph">LangGraph twin (<code>graph_core</code> + CLI / Server)</h2>
-    <p><code>chatbot.py</code> owns turn helpers. <code>graph_core.py</code> wires three nodes; <code>graph_chatbot.py</code> is CLI; <code>graph_server.py</code> exports <code>graph</code> for <code>langgraph.json</code>.</p>
+    <p><code>chatbot.py</code> owns turn helpers (and its own <code>run_turn</code>). <code>graph_core.py</code> wires <code>ingest</code> → <code>prepare</code> → <code>generate</code> ↔ <code>tools</code>; <code>graph_chatbot.py</code> is CLI; <code>graph_server.py</code> exports <code>graph</code> for <code>langgraph.json</code>.</p>
 
     <div class="mermaid">
 flowchart LR
-  START --> ingest --> prepare --> generate --> END
+  START --> ingest --> prepare --> generate
+  generate -->|tool_calls| tools
+  tools --> generate
+  generate -->|done| END
     </div>
 
     <table>
@@ -688,6 +705,9 @@ sequenceDiagram
   CP-&gt;&gt;G: restore messages / facts / notes
   Note over G: add_messages appends human
   G-&gt;&gt;G: ingest then prepare then generate
+  opt tool_calls
+    G-&gt;&gt;G: tools then generate again
+  end
   G-&gt;&gt;CP: write updated state
     </div>
 

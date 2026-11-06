@@ -259,6 +259,7 @@
       <li>Local Ollama + <code>uv</code></li>
       <li>Learning scripts + shared <code>graph_core</code> / Studio graph <code>tutor</code></li>
       <li>Soft/hard compression, pinned facts, checkpoint / thread mental model</li>
+      <li>Phase 1 graph: <code>generate</code> ↔ <code>tools</code> via <code>tools_condition</code> + <code>ToolNode</code></li>
       <li>Light CI: Conventional Commits on PR and on push to <code>main</code>/<code>dev</code></li>
     </ul>
     <div class="callout">
@@ -279,7 +280,7 @@ flowchart LR
 journey
   title Next learning slices
   section Graph skills
-    Conditional tool loop: 3: You
+    Conditional tool loop: 5: You
     Compare create_agent: 2: You
   section Control
     HITL interrupt: 2: You
@@ -295,8 +296,8 @@ journey
     <h2 id="phases">Phases</h2>
 
     <div class="phase" id="phase-1">
-      <h3>1. Make the graph more agent-like</h3>
-      <p><strong>Engineering:</strong> After <code>generate</code>, if there are <code>tool_calls</code>, use a <strong>conditional edge</strong> back to the model (instead of only the hand-written one-round loop). Optionally compare with <code>create_agent</code>.</p>
+      <h3>1. Make the graph more agent-like <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.04em;">(done on graph)</span></h3>
+      <p><strong>Engineering:</strong> <code>graph_core</code> now uses <code>generate</code> → <code>tools_condition</code> → <code>tools</code> (<code>ToolNode</code>) → <code>generate</code>. <code>chatbot.py</code> keeps hand-written <code>run_turn</code> for contrast. Optional next: compare with <code>create_agent</code>.</p>
       <p><strong>Concepts:</strong> conditional edges, ReAct loop, reducers / <code>add_messages</code>, <code>create_agent</code>.</p>
     </div>
 
@@ -341,7 +342,7 @@ journey
         <tr><th>Phase</th><th>Change in this repo</th><th>Learn</th></tr>
       </thead>
       <tbody>
-        <tr><td>1</td><td>Conditional tool loop</td><td>ReAct, edges, <code>create_agent</code></td></tr>
+        <tr><td>1</td><td>Conditional tool loop ✓ (<code>tools_condition</code> + <code>ToolNode</code>)</td><td>ReAct, edges, <code>create_agent</code></td></tr>
         <tr><td>2</td><td>HITL pause/resume</td><td>interrupt, checkpoint_id</td></tr>
         <tr><td>3</td><td>Streaming</td><td>stream modes / events</td></tr>
         <tr><td>4</td><td>Optional LangSmith</td><td>tracing</td></tr>

@@ -38,7 +38,8 @@ Next topics / what to change next: [`docs/learning-roadmap.html`](docs/learning-
 **`graph_chatbot.py` (LangGraph CLI twin):**
 
 - Same harvest / soft summary / hard trim / `get_time` as `chatbot.py` (via `graph_core.py`)
-- `StateGraph` nodes `ingest` → `prepare` → `generate` instead of a `while True` body
+- `StateGraph` nodes `ingest` → `prepare` → `generate` ↔ `tools` (`tools_condition` + `ToolNode`) instead of a `while True` body
+- Tool rounds live in the graph; `chatbot.py` still uses the hand-written `run_turn` one-round loop
 - SQLite checkpointer (`sessions/langgraph.sqlite`); `thread_id` is the session id
 - Does **not** use `create_agent`; does **not** share `sessions/*.json` with `chatbot.py`
 
