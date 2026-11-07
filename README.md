@@ -135,6 +135,7 @@ uv run langgraph dev
 - Graph id: **`tutor`**
 - Checkpoints: LangGraph API built-in (separate from CLI `sessions/langgraph.sqlite`)
 - Model: set `OLLAMA_MODEL` in `.env` (loaded via `langgraph.json` and `settings.py`)
+- Optional LangSmith: `LANGSMITH_API_KEY` + `LANGSMITH_TRACING=true` in `.env` (see `.env.example`); CLI prints `(langsmith: tracing ON/OFF …)`
 - Windows note: `colorama` is in the `dev` group so Studio logging works
 
 Optional flags: `uv run langgraph dev --no-browser`, `--port 2025`.

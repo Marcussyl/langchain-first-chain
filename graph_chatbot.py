@@ -19,6 +19,7 @@ from graph_core import (
   read_checkpoint,
   stream_with_hitl,
 )
+from settings import tracing_status_line
 
 # One sqlite file for all thread_id values (session ids). Not chatbot.py JSON.
 # langgraph.dev uses platform persistence (graph_server exports graph without SqliteSaver).
@@ -48,6 +49,7 @@ if __name__ == '__main__':
   print('Type "history" for checkpoints.')
   print('This file does not share sessions/*.json with chatbot.py.')
   print(f'Hard-trim budget: ~{MAX_CONTEXT_TOKENS} tokens (approximate).')
+  print(tracing_status_line())
   if status == 'loaded':
     print(f'(thread: {session_id}  loaded {history_len(state["messages"])} messages)')
   else:

@@ -5,6 +5,8 @@ Do not attach a custom checkpointer here. langgraph.dev provides persistence
 itself and rejects graphs compiled with SqliteSaver / MemorySaver.
 """
 
+# Load .env / LangSmith flags before the graph runs under langgraph.dev.
+import settings  # noqa: F401
 from graph_core import build_graph
 
 # Module-level CompiledGraph required by langgraph.json graphs mapping.

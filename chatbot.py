@@ -13,7 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 
-from settings import OLLAMA_MODEL, OLLAMA_TEMPERATURE
+from settings import OLLAMA_MODEL, OLLAMA_TEMPERATURE, tracing_status_line
 
 SYSTEM_PROMPT = (
     'You are a patient tutor in a continuing terminal chat (same session). '
@@ -438,6 +438,7 @@ if __name__ == '__main__':
     print('Try: tell it your name, or ask "What time is it?" (get_time tool).')
     print('Same session id after quit still remembers facts and recent turns.')
     print(f'Hard-trim budget: ~{MAX_CONTEXT_TOKENS} tokens (approximate).')
+    print(tracing_status_line())
     if status == 'loaded':
         print(f'(session: {session_id}  loaded {len(history)} messages)')
     elif status == 'failed':

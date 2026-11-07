@@ -275,6 +275,7 @@
         <li><a href="#tool">One tool (get_time)</a></li>
         <li><a href="#langgraph">LangGraph twin</a></li>
         <li><a href="#streaming">Streaming</a></li>
+        <li><a href="#langsmith">LangSmith tracing</a></li>
         <li><a href="#compression">Soft then hard compression</a></li>
         <li><a href="#next">Not in the code yet</a></li>
       </ol>
@@ -374,7 +375,7 @@ flowchart LR
     <p><code>/docs</code> on the API host is the <strong>real</strong> OpenAPI console (not a fake demo). Local dev persistence ≠ production deploy.</p>
 
     <h3>Studio vs LangSmith</h3>
-    <p><strong>Studio</strong> is the LangSmith-hosted UI for LangGraph. Optional <code>LANGSMITH_API_KEY</code> in <code>.env</code> enables cloud traces; without it, local chat still works — you just will not see LangSmith runs.</p>
+    <p><strong>Studio</strong> is the LangSmith-hosted UI for LangGraph (local <code>langgraph.dev</code>). Optional LangSmith tracing uploads each run to the cloud for debugging. Without a key, local chat / Studio still work — you just will not see cloud runs. Details: <a href="#langsmith">LangSmith tracing</a>.</p>
 
     <h3>LangGraph nodes are custom</h3>
     <p>No fixed official node names. You define functions and wire edges. Ours:</p>
@@ -605,7 +606,7 @@ flowchart LR
       <li><strong>In <code>.venv</code></strong>: deps from <code>pyproject.toml</code> / <code>uv.lock</code> (<code>uv sync</code>).</li>
       <li><strong>Global</strong>: <a href="https://docs.astral.sh/uv/">uv</a>, Ollama, Git, editor.</li>
     </ul>
-    <p>Prefer <code>uv run python chatbot.py</code>. Optional overrides: copy <code>.env.example</code> → <code>.env</code> (<code>OLLAMA_MODEL</code>, optional <code>LANGSMITH_API_KEY</code>).</p>
+    <p>Prefer <code>uv run python chatbot.py</code>. Optional overrides: copy <code>.env.example</code> → <code>.env</code> (<code>OLLAMA_MODEL</code>, optional <code>LANGSMITH_API_KEY</code> / <code>LANGSMITH_TRACING</code> / <code>LANGSMITH_PROJECT</code>).</p>
 
     <h2 id="packages">Packages</h2>
     <ul>
@@ -820,6 +821,35 @@ sequenceDiagram
       <p style="margin-top:0.65rem"><strong>What you should see in the CLI:</strong> <code>(stream: node=…)</code> for graph steps; on a tool question the first <code>generate</code> often has <strong>no</strong> <code>Bot:</code> text (only <code>tool_calls</code>); after HITL/tools you get <code>(stream: messages — LLM text tokens)</code> then <code>Bot:</code>, then a chunk/char count. Memory lines like <code>~219/2048 tokens</code> are the <em>context budget</em>, not the LLM token stream.</p>
     </div>
 
+    <h2 id="langsmith">LangSmith tracing (optional)</h2>
+    <p>Phase 4 habit: when a multi-step turn misbehaves, open the LangSmith run and inspect node / LLM / tool spans — do not guess from CLI prints alone.</p>
+    <div class="callout">
+      <p>In <code>.env</code> (see <code>.env.example</code>): set <code>LANGSMITH_API_KEY</code>, <code>LANGSMITH_TRACING=true</code>, optional <code>LANGSMITH_PROJECT=langchain-first-chain</code>. <code>settings.py</code> loads these and prints <code>(langsmith: tracing ON/OFF …)</code> at CLI startup (never prints the key). <code>graph_server.py</code> imports <code>settings</code> so <code>langgraph.dev</code> picks them up too.</p>
+    </div>
+    <div class="mermaid">
+flowchart LR
+  Turn[One user turn] --> Run[LangSmith run]
+  Thread[thread_id / session] --> Many[Many runs over time]
+  Run --> Spans[nodes / LLM / tools]
+    </div>
+    <p class="diagram-caption">flowchart — thread vs run</p>
+    <table>
+      <thead>
+        <tr><th>Concept</th><th>In this repo</th><th>In LangSmith</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Thread</td><td><code>thread_id</code> / session id (sqlite or Studio)</td><td>Groups related runs; conversation continuity</td></tr>
+        <tr><td>Run</td><td>One <code>stream</code> / <code>invoke</code> (plus resume after HITL)</td><td>One traced execution tree</td></tr>
+        <tr><td>Studio without key</td><td>Local graph UI still works</td><td>No cloud project traces</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li>Get a key at <a href="https://smith.langchain.com">smith.langchain.com</a>.</li>
+      <li>Run <code>uv run python graph_chatbot.py</code> or Studio; confirm the startup line says tracing ON.</li>
+      <li>Ask a time question (HITL + tools) and open the matching run — you should see <code>generate</code> / <code>tools</code> and the Ollama call.</li>
+      <li>Tracing is optional; leave the key blank for fully offline learning.</li>
+    </ul>
+
     <h2 id="compression">Compression: soft summary, then hard <code>trim_messages</code></h2>
     <div class="mermaid">
 flowchart TD
@@ -851,12 +881,11 @@ flowchart TD
     <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio, tool loop, HITL, and <code>create_agent</code> contrast are in.</p>
     <div class="mermaid">
 flowchart LR
-  Now[Now: graph + HITL + streaming] --> N1[LangSmith]
-  N1 --> N2[pytest + CI]
-  N2 --> Later[RAG / Deploy]
+  Now[Now: through Phase 4 tracing] --> N1[pytest + CI]
+  N1 --> Later[RAG / Deploy]
     </div>
     <p class="diagram-caption">flowchart — suggested next topics</p>
-    <p>Next learning candidates: optional LangSmith tracing, pytest smoke + CI.</p>
+    <p>Next learning candidates: pytest smoke + CI (Phase 5).</p>
 
     <footer>
       <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN). Forward-looking plan: <a href="learning-roadmap.html">learning-roadmap.html</a>.</p>
