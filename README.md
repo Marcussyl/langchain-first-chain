@@ -175,14 +175,21 @@ uv run pre-commit install --hook-type commit-msg
 
 After that, non-conforming `git commit` messages are rejected. New clones need to run the install again. Prefer fixing the message over `git commit --no-verify`.
 
+### Tests
+
+Smoke tests (no Ollama required):
+
+```bash
+uv sync --group dev
+uv run pytest -q
+```
+
 ### CI
 
-[`.github/workflows/conventional-commits.yml`](.github/workflows/conventional-commits.yml) runs on:
+Two workflows on **pull requests** and **pushes** to `main` / `dev`:
 
-- **Pull requests** targeting `main` or `dev`
-- **Pushes** to `main` or `dev` (including after a PR is merged)
-
-Allowed types match the local hook. Default GitHub “Merge pull request …” merge-commit subjects are allowed on push so a normal UI merge does not fail CI.
+- [`.github/workflows/conventional-commits.yml`](.github/workflows/conventional-commits.yml) — commit message lint (allowed types match the local hook; default GitHub merge subjects OK on push)
+- [`.github/workflows/tests.yml`](.github/workflows/tests.yml) — `uv sync --group dev` + `pytest` (uv cache enabled)
 
 ## Optional tweaks
 

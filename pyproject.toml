@@ -18,7 +18,12 @@ dev = [
   # Windows: langgraph-api ConsoleRenderer needs colorama
   'colorama',
   'pre-commit',
+  'pytest>=8.0.0',
 ]
+
+[tool.pytest.ini_options]
+testpaths = ['tests']
+pythonpath = ['.']
 
 [build-system]
 requires = ['hatchling']

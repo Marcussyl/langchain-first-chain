@@ -263,6 +263,7 @@
       <li>Phase 2 HITL: <code>interrupt()</code> before tools; CLI / Studio resume; <code>history</code> lists <code>checkpoint_id</code></li>
       <li>Phase 3 streaming: CLI <code>stream_mode=['updates','messages']</code>; Studio streams via API</li>
       <li>Phase 4 LangSmith: optional <code>LANGSMITH_*</code> in <code>.env</code>; CLI prints tracing status</li>
+      <li>Phase 5 tests: <code>uv run pytest</code> + GitHub Actions <code>tests.yml</code></li>
       <li>Light CI: Conventional Commits on PR and on push to <code>main</code>/<code>dev</code></li>
     </ul>
     <div class="callout">
@@ -289,7 +290,7 @@ journey
     HITL interrupt: 5: You
     Streaming events: 5: You
   section Engineering
-    Pytest smoke + CI test job: 3: You
+    Pytest smoke + CI test job: 5: You
     LangSmith traces optional: 5: You
   section Later repos
     RAG or Agent Server: 1: You
@@ -323,8 +324,8 @@ journey
     </div>
 
     <div class="phase" id="phase-5">
-      <h3>5. Deeper engineering</h3>
-      <p><strong>Engineering:</strong> Pytest smoke tests for graph helpers; CI job with <code>uv sync</code> + tests; optional Ruff.</p>
+      <h3>5. Deeper engineering <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.04em;">(done — smoke + CI)</span></h3>
+      <p><strong>Engineering:</strong> <code>tests/test_smoke.py</code> (helpers / graph nodes / LangSmith status — no Ollama). CI: <code>.github/workflows/tests.yml</code> runs <code>uv sync --group dev</code> + <code>pytest</code> on push/PR to <code>main</code>/<code>dev</code>. Ruff still optional later.</p>
       <p><strong>Concepts:</strong> test pyramid, CI beyond commitlint, dependency caching in Actions.</p>
     </div>
 
@@ -349,7 +350,7 @@ journey
         <tr><td>2</td><td>HITL pause/resume ✓ (<code>interrupt</code> before tools)</td><td>interrupt, checkpoint_id</td></tr>
         <tr><td>3</td><td>Streaming ✓ (<code>updates</code> + <code>messages</code>)</td><td>stream modes / events</td></tr>
         <tr><td>4</td><td>Optional LangSmith ✓ (<code>settings</code> + docs)</td><td>tracing</td></tr>
-        <tr><td>5</td><td>Tests + CI job</td><td>automated testing</td></tr>
+        <tr><td>5</td><td>Tests + CI job ✓ (<code>pytest</code> + <code>tests.yml</code>)</td><td>automated testing</td></tr>
         <tr><td>6</td><td>Config / Pydantic facts</td><td>validation</td></tr>
         <tr><td>7</td><td>New repository</td><td>RAG / deploy</td></tr>
       </tbody>

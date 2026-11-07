@@ -881,11 +881,12 @@ flowchart TD
     <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio, tool loop, HITL, and <code>create_agent</code> contrast are in.</p>
     <div class="mermaid">
 flowchart LR
-  Now[Now: through Phase 4 tracing] --> N1[pytest + CI]
-  N1 --> Later[RAG / Deploy]
+  Now[Now: through Phase 5 tests] --> N1[Phase 6 config / Pydantic facts]
+  N1 --> Later[RAG / Deploy elsewhere]
     </div>
     <p class="diagram-caption">flowchart — suggested next topics</p>
-    <p>Next learning candidates: pytest smoke + CI (Phase 5).</p>
+    <p>Next learning candidates: Phase 6 config / structured facts; Phase 7 stays a separate repo.</p>
+    <p>Local tests: <code>uv run pytest -q</code>. CI also runs them via <code>.github/workflows/tests.yml</code>.</p>
 
     <footer>
       <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN). Forward-looking plan: <a href="learning-roadmap.html">learning-roadmap.html</a>.</p>
