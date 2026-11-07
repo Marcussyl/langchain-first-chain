@@ -337,8 +337,8 @@ journey
     </div>
 
     <div class="phase" id="phase-7">
-      <h3>7. Separate themes (new repo)</h3>
-      <p><strong>Engineering:</strong> RAG / vector stores, FastAPI or Agent Chat UI, <code>langgraph deploy</code>.</p>
+      <h3>7. Separate themes (new repo) <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.04em;">(in progress — langchain-rag)</span></h3>
+      <p><strong>Engineering:</strong> In <code>langchain-rag</code>: Chroma RAG ✓, LangGraph retrieve→generate + Studio ✓, cited Sources ✓, retrieval compare + FastAPI <code>/ask</code> ✓. Next: thread checkpointer (Sqlite → Postgres), richer UI, <code>langgraph deploy</code>.</p>
       <p><strong>Concepts:</strong> retrieval vs chat compression, Agent Server, production checkpointers (e.g. Postgres).</p>
     </div>
 
@@ -353,7 +353,7 @@ journey
         <tr><td>4</td><td>Optional LangSmith ✓ (<code>settings</code> + docs)</td><td>tracing</td></tr>
         <tr><td>5</td><td>Tests + CI job ✓ (<code>pytest</code> + <code>tests.yml</code>)</td><td>automated testing</td></tr>
         <tr><td>6</td><td>Config / Pydantic facts ✓ (<code>SessionFacts</code>)</td><td>validation</td></tr>
-        <tr><td>7</td><td>New repository</td><td>RAG / deploy</td></tr>
+        <tr><td>7</td><td>New repo <code>langchain-rag</code> (RAG/Studio/API ✓; persistence next)</td><td>RAG / deploy</td></tr>
       </tbody>
     </table>
 
