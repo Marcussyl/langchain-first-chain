@@ -10,8 +10,10 @@ from chatbot import (
   hard_trim,
   harvest_facts,
   make_system,
+  pinned_facts,
   session_file,
 )
+from facts import SessionFacts
 from graph_core import (
   _parse_tool_approval,
   build_graph,
@@ -28,6 +30,22 @@ def test_harvest_and_format_facts() -> None:
   text = format_facts(facts)
   assert 'Ada' in text
   assert 'teal' in text
+
+
+def test_session_facts_rejects_invalid_and_unknown_keys() -> None:
+  model = SessionFacts.from_mapping(
+    {'user_name': 'Ada', 'favorite_color': 'not a color!!!', 'extra': 'drop-me'}
+  )
+  stored = model.stored_dict()
+  assert stored == {'user_name': 'Ada'}
+  assert pinned_facts({'user_name': 'Bob', 'nope': 1}) == {'user_name': 'Bob'}
+
+
+def test_session_facts_harvest_merge() -> None:
+  base = SessionFacts(user_name='Ada')
+  merged = base.harvest_text('My favorite color is teal.')
+  assert merged.user_name == 'Ada'
+  assert merged.favorite_color == 'teal'
 
 
 def test_make_system_pins_facts() -> None:
@@ -81,6 +99,11 @@ def test_empty_state_has_system_message() -> None:
 def test_pending_interrupts_empty_on_plain_dict() -> None:
   assert pending_interrupts({'messages': []}) == []
   assert pending_interrupts('not-a-dict') == []
+
+
+def test_memory_budget_settings_are_positive() -> None:
+  assert settings.MAX_CONTEXT_TOKENS >= 256
+  assert 0 < settings.SUMMARY_TRIGGER_TOKENS < settings.MAX_CONTEXT_TOKENS
 
 
 def test_tracing_status_line_shapes(monkeypatch) -> None:

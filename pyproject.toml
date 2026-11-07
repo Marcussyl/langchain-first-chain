@@ -33,6 +33,7 @@ build-backend = 'hatchling.build'
 [tool.hatch.build.targets.wheel]
 only-include = [
   'settings.py',
+  'facts.py',
   'chatbot.py',
   'first_chain.py',
   'extract_paragraph.py',

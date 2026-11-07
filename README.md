@@ -144,7 +144,7 @@ In Studio: new thread (= `thread_id`), say your name, then ask what your name is
 
 Type `q`, `quit`, or `exit` to stop the CLI scripts. For the chatbot: at start, enter a session id (blank = `default`). Tell it your name, quit, run it again with the **same** id, then ask `What is my name?` Also try `What time is it?` — if the model calls `get_time` you will see `(tool: get_time -> ...)`. Facts, topic notes, and recent turns (including tool messages) live in `sessions/<id>.json` (gitignored). Known facts are also pinned in Python so they survive summarizer glitches. Replies print in one go (`invoke`) so tool calls are not lost. The memory line shows `~tokens/2048`; hard trim cuts by **tokens**, not by message count, and `start_on='human'` drops a leftover tool result. `(memory: soft-summarized N older messages; ...)` means soft compression just ran.
 
-For `extract_paragraph.py`, each paste is a new request. Replies print in one go (not streamed). If the model omits author or date, those fields show `(none)`. Chatbot facts still use regex until a later slice.
+For `extract_paragraph.py`, each paste is a new request. Replies print in one go (not streamed). If the model omits author or date, those fields show `(none)`. Chatbot facts: regex proposes values, `facts.SessionFacts` (Pydantic) validates them.
 
 ## Later concepts (not implemented yet)
 
@@ -152,7 +152,7 @@ Keep these for the next learning slices. One concept at a time.
 
 1. **Leave for another repo** — RAG / vector stores (that compression is about documents, not chat), Agent Chat UI / FastAPI as a product front end. Local **`langgraph dev`** + Studio are in this repo; `create_agent` is still unused.
 
-Chatbot facts still use regex; applying Pydantic there is a later optional tweak. `chatbot.py` JSON is not a LangGraph checkpointer; CLI and Studio each use their own sqlite file.
+`chatbot.py` JSON is not a LangGraph checkpointer; CLI and Studio each use their own sqlite file. Memory budgets: optional `MAX_CONTEXT_TOKENS` / `SUMMARY_TRIGGER_TOKENS` in `.env`.
 
 ## Commits (Conventional Commits)
 

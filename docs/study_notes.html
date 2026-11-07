@@ -288,7 +288,8 @@
       <li><code>chatbot.py</code> — multi-turn messages + <code>trim_messages</code> + JSON sessions.</li>
       <li><code>graph_chatbot.py</code> — CLI entry for the LangGraph twin; sqlite checkpointer.</li>
       <li><code>graph_core.py</code> / <code>graph_server.py</code> — shared graph + <code>langgraph.dev</code> export (<code>tutor</code>).</li>
-      <li><code>settings.py</code> — <code>OLLAMA_MODEL</code> / temperature from env or <code>.env</code>.</li>
+      <li><code>settings.py</code> — <code>OLLAMA_*</code>, memory budgets, LangSmith flags from env or <code>.env</code>.</li>
+      <li><code>facts.py</code> — <code>SessionFacts</code> (Pydantic); regex harvest + validated storage.</li>
     </ul>
 
     <div class="mermaid">
@@ -394,7 +395,7 @@ flowchart LR
         <tr><th>Node</th><th>Role</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>ingest</code></td><td>Harvest personal <code>facts</code> from the latest human text (regex)</td></tr>
+        <tr><td><code>ingest</code></td><td>Harvest personal <code>facts</code> (regex propose → Pydantic <code>SessionFacts</code>)</td></tr>
         <tr><td><code>prepare</code></td><td>Rebuild <code>SystemMessage</code> + soft compression</td></tr>
         <tr><td><code>generate</code></td><td>Hard trim + model invoke (append one <code>AIMessage</code>)</td></tr>
         <tr><td><code>tools</code></td><td>HITL <code>interrupt()</code> then <code>ToolNode([get_time])</code> (or rejected <code>ToolMessage</code>)</td></tr>
@@ -637,7 +638,7 @@ flowchart LR
   include_raw=True,
 )
 chain = prompt | structured_model</code></pre>
-    <p><code>include_raw=True</code>: bad parse → dict with error instead of crashing. Python <code>count_paragraphs</code> is printed beside the model’s count for comparison. Chatbot facts still use regex for now.</p>
+    <p><code>include_raw=True</code>: bad parse → dict with error instead of crashing. Python <code>count_paragraphs</code> is printed beside the model’s count for comparison. Chatbot facts use regex + Pydantic <code>SessionFacts</code> (see scripts list / <code>facts.py</code>).</p>
 
     <h2 id="chatbot">Chatbot memory (<code>chatbot.py</code>)</h2>
     <p>Short-term memory is a <strong>list of messages</strong>:</p>
@@ -866,7 +867,7 @@ flowchart TD
      (facts stay in a Python dict on SystemMessage)
   -> trim_messages by approximate tokens (hard backup)
   -> model</code></pre>
-    <p><strong>Soft</strong>: fold old turns into topic notes; pin personal facts in Python so a bad summarizer cannot wipe names.</p>
+    <p><strong>Soft</strong>: fold old turns into topic notes; pin personal facts via <code>SessionFacts</code> so a bad summarizer cannot wipe names or invent unknown keys.</p>
     <p><strong>Hard</strong>: token budget <code>MAX_CONTEXT_TOKENS = 2048</code>, <code>strategy='last'</code>, <code>include_system=True</code>, <code>start_on='human'</code>.</p>
     <pre><code>trim_messages(
   messages,
@@ -881,12 +882,10 @@ flowchart TD
     <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio, tool loop, HITL, and <code>create_agent</code> contrast are in.</p>
     <div class="mermaid">
 flowchart LR
-  Now[Now: through Phase 5 tests] --> N1[Phase 6 config / Pydantic facts]
-  N1 --> Later[RAG / Deploy elsewhere]
+  Now[Now: through Phase 6] --> Later[Phase 7: RAG / Deploy elsewhere]
     </div>
     <p class="diagram-caption">flowchart — suggested next topics</p>
-    <p>Next learning candidates: Phase 6 config / structured facts; Phase 7 stays a separate repo.</p>
-    <p>Local tests: <code>uv run pytest -q</code>. CI also runs them via <code>.github/workflows/tests.yml</code>.</p>
+    <p>Next learning candidate: Phase 7 in a <strong>separate repository</strong> (RAG / deploy). Local tests: <code>uv run pytest -q</code>.</p>
 
     <footer>
       <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN). Forward-looking plan: <a href="learning-roadmap.html">learning-roadmap.html</a>.</p>

@@ -264,6 +264,7 @@
       <li>Phase 3 streaming: CLI <code>stream_mode=['updates','messages']</code>; Studio streams via API</li>
       <li>Phase 4 LangSmith: optional <code>LANGSMITH_*</code> in <code>.env</code>; CLI prints tracing status</li>
       <li>Phase 5 tests: <code>uv run pytest</code> + GitHub Actions <code>tests.yml</code></li>
+      <li>Phase 6: <code>SessionFacts</code> (Pydantic) + env memory budgets in <code>settings</code></li>
       <li>Light CI: Conventional Commits on PR and on push to <code>main</code>/<code>dev</code></li>
     </ul>
     <div class="callout">
@@ -330,8 +331,8 @@ journey
     </div>
 
     <div class="phase" id="phase-6">
-      <h3>6. Config and quality</h3>
-      <p><strong>Engineering:</strong> Keep env-based model config; optionally replace regex facts with Pydantic; tighten types/lint.</p>
+      <h3>6. Config and quality <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.04em;">(done)</span></h3>
+      <p><strong>Engineering:</strong> <code>facts.SessionFacts</code> validates harvested fields; regex still proposes values. <code>settings</code> owns <code>OLLAMA_*</code>, <code>MAX_CONTEXT_TOKENS</code>, <code>SUMMARY_TRIGGER_TOKENS</code>, LangSmith flags. Ruff remains optional.</p>
       <p><strong>Concepts:</strong> configuration management, structured validation beyond LLM output.</p>
     </div>
 
@@ -351,7 +352,7 @@ journey
         <tr><td>3</td><td>Streaming ✓ (<code>updates</code> + <code>messages</code>)</td><td>stream modes / events</td></tr>
         <tr><td>4</td><td>Optional LangSmith ✓ (<code>settings</code> + docs)</td><td>tracing</td></tr>
         <tr><td>5</td><td>Tests + CI job ✓ (<code>pytest</code> + <code>tests.yml</code>)</td><td>automated testing</td></tr>
-        <tr><td>6</td><td>Config / Pydantic facts</td><td>validation</td></tr>
+        <tr><td>6</td><td>Config / Pydantic facts ✓ (<code>SessionFacts</code>)</td><td>validation</td></tr>
         <tr><td>7</td><td>New repository</td><td>RAG / deploy</td></tr>
       </tbody>
     </table>

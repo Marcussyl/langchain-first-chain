@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared runtime settings (Ollama model name, LangSmith tracing, etc.)."""
+"""Shared runtime settings (Ollama model name, memory budgets, LangSmith tracing)."""
 
 from __future__ import annotations
 
@@ -30,10 +30,36 @@ def _truthy(raw: str | None) -> bool:
   return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
+def _env_float(name: str, default: float) -> float:
+  raw = os.getenv(name)
+  if raw is None or not raw.strip():
+    return default
+  try:
+    return float(raw)
+  except ValueError:
+    return default
+
+
+def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
+  raw = os.getenv(name)
+  if raw is None or not raw.strip():
+    return default
+  try:
+    value = int(raw)
+  except ValueError:
+    return default
+  return max(minimum, value)
+
+
 _load_dotenv()
 
-OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
-OLLAMA_TEMPERATURE = float(os.getenv('OLLAMA_TEMPERATURE', '0'))
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2').strip() or 'llama3.2'
+OLLAMA_TEMPERATURE = _env_float('OLLAMA_TEMPERATURE', 0.0)
+# Soft/hard memory budgets (approximate tokens). Soft trigger should stay below hard max.
+MAX_CONTEXT_TOKENS = _env_int('MAX_CONTEXT_TOKENS', 2048, minimum=256)
+SUMMARY_TRIGGER_TOKENS = _env_int('SUMMARY_TRIGGER_TOKENS', 1400, minimum=128)
+if SUMMARY_TRIGGER_TOKENS >= MAX_CONTEXT_TOKENS:
+  SUMMARY_TRIGGER_TOKENS = max(128, MAX_CONTEXT_TOKENS - 1)
 
 # LangSmith / LangChain tracing (optional). Prefer LANGSMITH_* names.
 LANGSMITH_API_KEY = (

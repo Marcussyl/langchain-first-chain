@@ -13,7 +13,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 
-from settings import OLLAMA_MODEL, OLLAMA_TEMPERATURE, tracing_status_line
+from facts import SessionFacts
+from settings import (
+  MAX_CONTEXT_TOKENS,
+  OLLAMA_MODEL,
+  OLLAMA_TEMPERATURE,
+  SUMMARY_TRIGGER_TOKENS,
+  tracing_status_line,
+)
 
 SYSTEM_PROMPT = (
     'You are a patient tutor in a continuing terminal chat (same session). '
@@ -35,19 +42,7 @@ SYSTEM_PROMPT = (
 MAX_MESSAGES_BEFORE_SUMMARY = 8
 KEEP_RECENT_MESSAGES = 7
 
-# Hard trim uses the real unit: tokens (approximate). Smaller than llama3.2's
-# full window on purpose so the CLI budget is easy to see.
-MAX_CONTEXT_TOKENS = 2048
-SUMMARY_TRIGGER_TOKENS = 1400
-
-FACT_PATTERNS = (
-    (r'(?i)\bmy name is\s+([A-Za-z]+)', 'user_name'),
-    (r'(?i)\bmy name if\s+([A-Za-z]+)', 'user_name'),
-    (r'(?i)\byou are\s+([A-Za-z]+)', 'assistant_name'),
-    (r'(?i)\byour name is\s+([A-Za-z]+)', 'assistant_name'),
-    (r'(?i)\bmy fav(?:orite)? color is\s+([A-Za-z]+)', 'favorite_color'),
-    (r'(?i)\bmy fav(?:orite)? one is\s+([A-Za-z]+)', 'favorite_item'),
-)
+# MAX_CONTEXT_TOKENS / SUMMARY_TRIGGER_TOKENS come from settings (.env).
 
 # Llama often replaces a good summary with a safety refusal or prompt echo.
 UNUSABLE_SUMMARY_MARKERS = (
@@ -60,13 +55,6 @@ UNUSABLE_SUMMARY_MARKERS = (
     'existing summary:',
     'updated summary:',
 )
-
-FACT_LABELS = {
-    'user_name': "The user's name is",
-    'assistant_name': "The assistant's name is",
-    'favorite_color': "The user's favorite color is",
-    'favorite_item': "The user's favorite item/brand is",
-}
 
 # 2) Local chat model via Ollama (must be running; model must be pulled)
 model = ChatOllama(model=OLLAMA_MODEL, temperature=OLLAMA_TEMPERATURE)
@@ -116,20 +104,14 @@ SESSION_ID_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
 
 
 def harvest_facts(user_text: str, facts: dict[str, str]) -> None:
-    """Pin personal facts in Python so an LLM summary cannot overwrite them."""
-    for pattern, key in FACT_PATTERNS:
-        match = re.search(pattern, user_text)
-        if match:
-            facts[key] = match.group(1)
+    """Pin personal facts via SessionFacts so summaries cannot invent keys."""
+    updated = SessionFacts.from_mapping(facts).harvest_text(user_text)
+    facts.clear()
+    facts.update(updated.stored_dict())
 
 
 def format_facts(facts: dict[str, str]) -> str:
-    lines = [
-        f'- {FACT_LABELS[key]} {value}.'
-        for key, value in facts.items()
-        if key in FACT_LABELS
-    ]
-    return '\n'.join(lines) if lines else '(none yet)'
+    return SessionFacts.from_mapping(facts).format_lines()
 
 
 def is_unusable_summary(text: str) -> bool:
@@ -374,12 +356,8 @@ def messages_from_json(rows: list) -> list[BaseMessage]:
 
 
 def pinned_facts(raw: dict) -> dict[str, str]:
-    """Keep only known fact keys as strings."""
-    return {
-        str(key): str(value)
-        for key, value in raw.items()
-        if key in FACT_LABELS and value is not None
-    }
+    """Keep only known fact keys as validated strings (Pydantic SessionFacts)."""
+    return SessionFacts.from_mapping(raw).stored_dict()
 
 
 def load_session(
