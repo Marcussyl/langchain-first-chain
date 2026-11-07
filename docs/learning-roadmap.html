@@ -261,6 +261,7 @@
       <li>Soft/hard compression, pinned facts, checkpoint / thread mental model</li>
       <li>Phase 1 graph: <code>generate</code> ↔ <code>tools</code> via <code>tools_condition</code> + <code>ToolNode</code></li>
       <li>Phase 2 HITL: <code>interrupt()</code> before tools; CLI / Studio resume; <code>history</code> lists <code>checkpoint_id</code></li>
+      <li>Phase 3 streaming: CLI <code>stream_mode=['updates','messages']</code>; Studio streams via API</li>
       <li>Light CI: Conventional Commits on PR and on push to <code>main</code>/<code>dev</code></li>
     </ul>
     <div class="callout">
@@ -285,7 +286,7 @@ journey
     Compare create_agent: 5: You
   section Control
     HITL interrupt: 5: You
-    Streaming events: 2: You
+    Streaming events: 5: You
   section Engineering
     Pytest smoke + CI test job: 3: You
     LangSmith traces optional: 2: You
@@ -309,8 +310,8 @@ journey
     </div>
 
     <div class="phase" id="phase-3">
-      <h3>3. Streaming</h3>
-      <p><strong>Engineering:</strong> Stream tokens or node events through the LangGraph API / Studio; optionally stream in the CLI.</p>
+      <h3>3. Streaming <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.04em;">(done on graph)</span></h3>
+      <p><strong>Engineering:</strong> <code>graph_chatbot.py</code> calls <code>stream_with_hitl</code> → <code>graph.stream(..., stream_mode=['updates','messages'])</code>. Prints <code>(stream: node=…)</code> then tokenizes <code>Bot:</code> from the <code>generate</code> node. Studio already streams over the LangGraph API.</p>
       <p><strong>Concepts:</strong> <code>stream</code> modes, token vs graph events (and why string-streaming hid <code>tool_calls</code> before).</p>
     </div>
 
@@ -345,7 +346,7 @@ journey
       <tbody>
         <tr><td>1</td><td>Conditional tool loop ✓ (<code>tools_condition</code> + <code>ToolNode</code>)</td><td>ReAct, edges, <code>create_agent</code></td></tr>
         <tr><td>2</td><td>HITL pause/resume ✓ (<code>interrupt</code> before tools)</td><td>interrupt, checkpoint_id</td></tr>
-        <tr><td>3</td><td>Streaming</td><td>stream modes / events</td></tr>
+        <tr><td>3</td><td>Streaming ✓ (<code>updates</code> + <code>messages</code>)</td><td>stream modes / events</td></tr>
         <tr><td>4</td><td>Optional LangSmith</td><td>tracing</td></tr>
         <tr><td>5</td><td>Tests + CI job</td><td>automated testing</td></tr>
         <tr><td>6</td><td>Config / Pydantic facts</td><td>validation</td></tr>

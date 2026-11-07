@@ -274,6 +274,7 @@
         <li><a href="#chatbot">Chatbot memory</a></li>
         <li><a href="#tool">One tool (get_time)</a></li>
         <li><a href="#langgraph">LangGraph twin</a></li>
+        <li><a href="#streaming">Streaming</a></li>
         <li><a href="#compression">Soft then hard compression</a></li>
         <li><a href="#next">Not in the code yet</a></li>
       </ol>
@@ -492,6 +493,7 @@ sequenceDiagram
       <li>Studio: Interrupts panel → resume with boolean / JSON.</li>
       <li>Time travel: pass <code>checkpoint_id</code> in <code>configurable</code> to continue from an older snapshot (same <code>thread_id</code>).</li>
       <li>On resume the node restarts from the top — keep side effects <strong>after</strong> <code>interrupt()</code>.</li>
+      <li>CLI turns use <code>stream_with_hitl</code> (see <a href="#streaming">Streaming</a>), not plain <code>invoke</code>.</li>
     </ul>
 
     <h3>Checkpointing</h3>
@@ -782,6 +784,42 @@ sequenceDiagram
 
     <p>Model name: <code>settings.OLLAMA_MODEL</code>. The tutor graph is intentional teaching code — production tool agents usually start from <code>create_agent</code> (see comparison above). Agent Chat UI / FastAPI product fronts stay out of this repo.</p>
 
+    <h2 id="streaming">Streaming (<code>updates</code> + <code>messages</code>)</h2>
+    <p><code>graph_chatbot.py</code> uses <code>stream_with_hitl</code> → <code>graph.stream(..., stream_mode=['updates', 'messages'])</code>. Studio streams over the LangGraph API without changing <code>graph_server.py</code>.</p>
+    <table>
+      <thead>
+        <tr><th>Mode</th><th>What you see</th><th>Use</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>updates</code></td><td><code>(stream: node=ingest|prepare|generate|tools)</code></td><td>Graph progress / which step finished</td></tr>
+        <tr><td><code>messages</code></td><td><code>Bot:</code> token chunks from the <code>generate</code> node</td><td>Chat UI feel</td></tr>
+        <tr><td><code>values</code></td><td>Full state after each step</td><td>Debug (not used in CLI)</td></tr>
+        <tr><td><code>custom</code></td><td>Payloads from <code>get_stream_writer()</code></td><td>Progress hooks (not used yet)</td></tr>
+      </tbody>
+    </table>
+    <div class="mermaid">
+sequenceDiagram
+  participant CLI as graph_chatbot
+  participant G as Graph
+  participant M as Ollama
+
+  CLI-&gt;&gt;G: stream updates + messages
+  G--&gt;&gt;CLI: updates ingest / prepare
+  G-&gt;&gt;M: generate invoke
+  M--&gt;&gt;CLI: AIMessageChunk tokens
+  G--&gt;&gt;CLI: updates generate
+  opt tool_calls
+    G--&gt;&gt;CLI: interrupt
+    CLI-&gt;&gt;G: Command resume
+    G--&gt;&gt;CLI: tools update + more tokens
+  end
+    </div>
+    <p class="diagram-caption">sequenceDiagram — CLI dual stream modes</p>
+    <div class="callout">
+      <p><strong>Why not string-stream the chain?</strong> Early chatbot experiments used <code>StrOutputParser</code> / string <code>stream</code>, which flatten the model output to text and <strong>hide <code>tool_calls</code></strong>. Keep <code>AIMessage</code> (or stream <code>AIMessageChunk</code>) so tools stay visible; LangGraph <code>messages</code> mode does that.</p>
+      <p style="margin-top:0.65rem"><strong>What you should see in the CLI:</strong> <code>(stream: node=…)</code> for graph steps; on a tool question the first <code>generate</code> often has <strong>no</strong> <code>Bot:</code> text (only <code>tool_calls</code>); after HITL/tools you get <code>(stream: messages — LLM text tokens)</code> then <code>Bot:</code>, then a chunk/char count. Memory lines like <code>~219/2048 tokens</code> are the <em>context budget</em>, not the LLM token stream.</p>
+    </div>
+
     <h2 id="compression">Compression: soft summary, then hard <code>trim_messages</code></h2>
     <div class="mermaid">
 flowchart TD
@@ -813,13 +851,12 @@ flowchart TD
     <p>See README “Later concepts”: RAG / Agent Chat UI / FastAPI. Local <code>langgraph.dev</code> + Studio, tool loop, HITL, and <code>create_agent</code> contrast are in.</p>
     <div class="mermaid">
 flowchart LR
-  Now[Now: graph + HITL + create_agent compare] --> N1[streaming]
-  N1 --> N2[LangSmith]
-  N2 --> N3[pytest + CI]
-  N3 --> Later[RAG / Deploy]
+  Now[Now: graph + HITL + streaming] --> N1[LangSmith]
+  N1 --> N2[pytest + CI]
+  N2 --> Later[RAG / Deploy]
     </div>
     <p class="diagram-caption">flowchart — suggested next topics</p>
-    <p>Next learning candidates: streaming events, optional LangSmith tracing, pytest smoke + CI.</p>
+    <p>Next learning candidates: optional LangSmith tracing, pytest smoke + CI.</p>
 
     <footer>
       <p>Replaces the former <code>study_notes.md</code>. View this file in a browser for rendered Mermaid diagrams (needs network for the CDN). Forward-looking plan: <a href="learning-roadmap.html">learning-roadmap.html</a>.</p>

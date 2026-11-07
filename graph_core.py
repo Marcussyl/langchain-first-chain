@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Shared LangGraph tutor: ingest -> prepare -> generate <-> tools (CLI and langgraph.dev)."""
 
+from collections.abc import Callable
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.types import interrupt
+from langgraph.types import Command, interrupt
 
 from chatbot import (
   MAX_CONTEXT_TOKENS,
@@ -18,9 +19,11 @@ from chatbot import (
   hard_trim,
   harvest_facts,
   make_system,
-  print_bot,
   reply_chain,
 )
+
+# CLI / learning: node deltas + LLM tokens (Studio also streams via the API).
+STREAM_MODES = ['updates', 'messages']
 
 # ReAct-style tool execution for the graph (chatbot.py CLI still uses run_turn).
 _tool_node = ToolNode([get_time], handle_tool_errors=True)
@@ -140,13 +143,15 @@ def generate_node(state: ChatState) -> dict:
     if notes:
       print(f'(topic notes: {notes})')
 
-  ai = reply_chain.invoke({'messages': to_send})
+  # Prefer .stream() so stream_mode='messages' can drip AIMessageChunks.
+  # Do not use StrOutputParser — that would hide tool_calls.
+  assembled = None
+  for piece in reply_chain.stream({'messages': to_send}):
+    assembled = piece if assembled is None else assembled + piece
+  ai = assembled if assembled is not None else AIMessage(content='')
   if not isinstance(ai, AIMessage):
     ai = AIMessage(content=str(ai))
-  tool_calls = getattr(ai, 'tool_calls', None) or []
-  if not tool_calls:
-    print_bot(ai)
-    print()
+  # Bot text is printed by stream_with_hitl (token stream), not here.
   return {'messages': [ai]}
 
 
@@ -249,6 +254,124 @@ def pending_interrupts(result: Any) -> list:
     return []
   items = result.get('__interrupt__') or []
   return list(items)
+
+
+def _chunk_text(token: Any) -> str:
+  """Pull printable text from an AIMessage / AIMessageChunk content field."""
+  content = getattr(token, 'content', None)
+  if isinstance(content, str):
+    return content
+  if isinstance(content, list):
+    parts: list[str] = []
+    for block in content:
+      if isinstance(block, str):
+        parts.append(block)
+      elif isinstance(block, dict) and block.get('type') == 'text':
+        parts.append(str(block.get('text') or ''))
+    return ''.join(parts)
+  return ''
+
+
+def _interrupts_from_state(graph, config: dict) -> list:
+  """Read pending interrupts from the latest checkpoint (after a stream ends)."""
+  snapshot = graph.get_state(config)
+  found: list = []
+  for task in getattr(snapshot, 'tasks', None) or ():
+    for item in getattr(task, 'interrupts', None) or ():
+      found.append(item)
+  return found
+
+
+def stream_with_hitl(
+  graph,
+  payload: dict | Command,
+  config: dict,
+  *,
+  read_approval: Callable[[list], bool],
+) -> None:
+  """Stream node updates + generate tokens; pause for HITL when tools interrupt.
+
+  - updates: which node just finished (and __interrupt__)
+  - messages: LLM token chunks from the generate node only
+  """
+  next_input: dict | Command = payload
+  print('(stream: listening for updates + messages)')
+  while True:
+    interrupts: list = []
+    bot_started = False
+    text_chunks = 0
+    text_chars = 0
+    empty_generate_chunks = 0
+
+    def _end_bot_line() -> None:
+      nonlocal bot_started
+      if bot_started:
+        print()
+        if text_chunks:
+          print(f'(stream: messages — {text_chunks} text chunk(s), {text_chars} chars)')
+        print()
+        bot_started = False
+
+    for mode, chunk in graph.stream(next_input, config, stream_mode=STREAM_MODES):
+      if mode == 'updates':
+        if not isinstance(chunk, dict):
+          continue
+        if '__interrupt__' in chunk:
+          _end_bot_line()
+          interrupts = list(chunk.get('__interrupt__') or [])
+          continue
+        # updates arrive after a node's tokens — close Bot: before the node line
+        _end_bot_line()
+        for node_name, update in chunk.items():
+          print(f'(stream: node={node_name})')
+          if node_name != 'generate' or not isinstance(update, dict):
+            continue
+          # First generate after a time question is often tool_calls with empty text.
+          for msg in update.get('messages') or []:
+            calls = getattr(msg, 'tool_calls', None) or []
+            if calls and not _chunk_text(msg):
+              names = [c.get('name') for c in calls]
+              print(
+                f'(stream: generate emitted tool_calls={names}, '
+                'no text tokens yet — Bot: comes after tools/HITL)'
+              )
+        continue
+      if mode != 'messages':
+        continue
+      # messages mode yields (token, metadata)
+      if not isinstance(chunk, tuple) or len(chunk) != 2:
+        continue
+      token, meta = chunk
+      if (meta or {}).get('langgraph_node') != 'generate':
+        continue
+      text = _chunk_text(token)
+      if not text:
+        empty_generate_chunks += 1
+        continue
+      text_chunks += 1
+      text_chars += len(text)
+      if not bot_started:
+        print('(stream: messages — LLM text tokens)')
+        print('Bot: ', end='', flush=True)
+        bot_started = True
+      print(text, end='', flush=True)
+    _end_bot_line()
+    if not text_chunks and empty_generate_chunks:
+      print(
+        f'(stream: messages — {empty_generate_chunks} generate chunk(s) with no text; '
+        'usually tool_calls)'
+      )
+
+    if not interrupts:
+      interrupts = _interrupts_from_state(graph, config)
+    if not interrupts:
+      return
+
+    print('(HITL: graph paused before tools)')
+    for item in interrupts:
+      print(f'  interrupt: {getattr(item, "value", item)}')
+    approved = read_approval(interrupts)
+    next_input = Command(resume=approved)
 
 
 def print_checkpoint_history(graph, config: dict, limit: int = 8) -> None:
